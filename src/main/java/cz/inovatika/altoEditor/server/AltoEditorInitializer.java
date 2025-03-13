@@ -142,6 +142,7 @@ public class AltoEditorInitializer {
                         } else if (isAltoEditorRolePath(ctx.path(), user)) {
                             // pokracuje jako alto editor k endpointum api
                         } else {
+                            LOGGER.info(user);
                             ctx.status(403).result("Forbidden");
                             LOGGER.warn("Forbidden access (user = " + user.getUsername() + ") to endpoint: " + ctx.path());
                         }

@@ -1,0 +1,32 @@
+package cz.inovatika.altoEditor.application.facade;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Component;
+
+import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.service.BatchService;
+import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
+import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
+import lombok.RequiredArgsConstructor;
+
+@Component
+@RequiredArgsConstructor
+public class BatchFacade {
+
+    private final BatchService service;
+
+    private final BatchMapper mapper;
+
+    public Page<BatchDto> searchBatches(
+            BatchSearchRequest request,
+            Pageable pageable) {
+        Page<Batch> page = service.search(request.getPid(), request.getState(), request.getSubstate(),
+                request.getCreatedAfter(), request.getCreatedBefore(), request.getUpdatedAfter(),
+                request.getUpdatedBefore(),
+                request.getPriority(), request.getType(), request.getInstance(), pageable);
+
+        return page.map(mapper::toDto);
+    }
+}

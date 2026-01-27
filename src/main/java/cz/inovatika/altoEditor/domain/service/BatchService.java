@@ -54,9 +54,8 @@ public class BatchService {
     }
 
     @Transactional
-    public void setRunInfo(Batch batch, Integer estimatedItemCount, BatchType type) {
-        batch.setEstimatedItemCount(estimatedItemCount);
-        batch.setType(type);
+    public void setEstimatedItemCount(Batch batch, int itemCount) {
+        batch.setEstimatedItemCount(itemCount);
         repository.save(batch);
     }
 

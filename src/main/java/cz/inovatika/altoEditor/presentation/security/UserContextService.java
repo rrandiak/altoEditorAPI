@@ -31,6 +31,10 @@ public class UserContextService {
         }
         return getCurrentUser().getUserId();
     }
+
+    public String getUid() {
+        return getCurrentUser().getUid();
+    }
     
     public String getUsername() {
         return getCurrentUser().getUsername();

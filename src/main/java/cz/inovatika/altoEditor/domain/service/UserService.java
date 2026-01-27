@@ -27,32 +27,33 @@ public class UserService {
      * @throws IllegalArgumentException if login is null or user already exists
      */
     @Transactional
-    public User createUser(String username) {
-        if (userRepository.existsByLogin(username)) {
-            throw new IllegalArgumentException("User with login '" + username + "' already exists");
+    public User createUser(String uid, String username) {
+        if (userRepository.existsByUsername(username)) {
+            throw new IllegalArgumentException("User with username '" + username + "' already exists");
         }
 
         User user = new User();
-        user.setLogin(username);
+        user.setUid(uid);
+        user.setUsername(username);
         User saved = userRepository.save(user);
-        log.info("Created user with ID: {} and login: {}", saved.getId(), saved.getLogin());
+        log.info("Created user with ID: {} and username: {}", saved.getId(), saved.getUsername());
         return saved;
     }
 
     /**
-     * Get user by login.
+     * Get user by username.
      * 
      * @param username
      * @return User entity
      * @throws IllegalArgumentException if user does not exist
      */
-    public User getUserByLogin(String username) {
-        return userRepository.findByLogin(username)
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
     }
 
     /**
-     * Get special user by login.
+     * Get special user by username.
      * If the user does not exist, an exception is thrown.
      * 
      * @param specialUser type of special user

@@ -33,7 +33,7 @@ public class UserFacade {
     }
 
     public UserDto createCurrentUser() {
-        return userMapper.toDto(userService.createUser(userContext.getUsername()));
+        return userMapper.toDto(userService.createUser(userContext.getUid(), userContext.getUsername()));
     }
 
 }

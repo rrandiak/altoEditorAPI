@@ -2,7 +2,6 @@ package cz.inovatika.altoEditor.presentation.rest;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,7 +28,6 @@ class KrameriusControllerTest extends ControllerTest {
     private KrameriusFacade facade;
 
     private final String TEST_PID = "uuid:12345678-1234-1234-1234-1234567890ab";
-    private final int TEST_OBJECT_ID = 1;
     private KrameriusObjectMetadata mockMetadata;
 
     @BeforeEach
@@ -81,41 +78,6 @@ class KrameriusControllerTest extends ControllerTest {
     void getKrameriusObject_shouldReturnUnauthorized_whenNoUser() throws Exception {
         mockMvc.perform(get("/api/kramerius/objects/" + TEST_PID)
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @WithMockUser(authorities = { "CURATOR" })
-    void uploadObjectToKramerius_shouldReturnOk_whenUserIsCurator() throws Exception {
-        mockMvc.perform(post("/api/kramerius/objects/upload/" + TEST_OBJECT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(authorities = { "EDITOR" })
-    void uploadObjectToKramerius_shouldReturnForbidden_whenUserIsEditor() throws Exception {
-        mockMvc.perform(post("/api/kramerius/objects/upload/" + TEST_OBJECT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = { "USER" })
-    void uploadObjectToKramerius_shouldReturnForbidden_whenUserHasNoProperAuthority() throws Exception {
-        mockMvc.perform(post("/api/kramerius/objects/upload/" + TEST_OBJECT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void uploadObjectToKramerius_shouldReturnUnauthorized_whenNoUser() throws Exception {
-        mockMvc.perform(post("/api/kramerius/objects/upload/" + TEST_OBJECT_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isUnauthorized());
     }
 }

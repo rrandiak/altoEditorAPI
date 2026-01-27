@@ -35,7 +35,7 @@ public class User {
     /**
      * Unique identifier for the user from an external authentication/authorization system.
      */
-    @Column(name = "uid", nullable = false, unique = true)
+    @Column(name = "uid")
     private String uid;
 
     /**

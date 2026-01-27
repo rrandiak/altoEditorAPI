@@ -71,8 +71,8 @@ public class UserControllerIT {
     void setUp() {
         userRepository.deleteAll();
         userRepository.saveAll(List.of(
-                User.builder().login("user1").build(),
-                User.builder().login("user2").build()
+                User.builder().username("user1").build(),
+                User.builder().username("user2").build()
         ));
     }
 
@@ -83,7 +83,7 @@ public class UserControllerIT {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.content[*].login", containsInAnyOrder("user1", "user2")));
+                .andExpect(jsonPath("$.content[*].username", containsInAnyOrder("user1", "user2")));
     }
 
     @Test
@@ -93,7 +93,7 @@ public class UserControllerIT {
                 .header("Authorization", "Bearer test-token")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.login").value("user1"));
+                .andExpect(jsonPath("$.username").value("user1"));
     }
 
     @Test
@@ -103,7 +103,7 @@ public class UserControllerIT {
                 .header("Authorization", "Bearer test-token")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.login").value("newuser"));
+                .andExpect(jsonPath("$.username").value("newuser"));
     }
 
     @Test

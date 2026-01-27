@@ -1,7 +1,6 @@
 package cz.inovatika.altoEditor.domain.enums;
 
 public enum BatchType {
-    GENERATE_SINGLE,
-    GENERATE_MULTIPLE,
+    GENERATE,
     RETRIEVE_HIERARCHY,
 }

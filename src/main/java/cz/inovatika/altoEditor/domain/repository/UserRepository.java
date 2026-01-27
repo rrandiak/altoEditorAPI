@@ -16,18 +16,18 @@ import cz.inovatika.altoEditor.domain.model.User;
 public interface UserRepository extends JpaRepository<User, Integer> {
 
     /**
-     * Find user by login.
+     * Find user by username.
      */
-    Optional<User> findByLogin(String login);
+    Optional<User> findByUsername(String username);
 
     /**
-     * Check if user exists by login.
+     * Check if user exists by username.
      */
-    boolean existsByLogin(String login);
+    boolean existsByUsername(String username);
     
     /**
      * Find a special user by enum.
      */
-    @Query("SELECT u FROM User u WHERE u.login = :#{#specialUser.getUsername()}")
+    @Query("SELECT u FROM User u WHERE u.username = :#{#specialUser.getUsername()}")
     Optional<User> findSpecialUser(SpecialUser specialUser);
 }

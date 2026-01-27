@@ -53,8 +53,8 @@ class BatchControllerTest extends ControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "EDITOR" })
-    void getBatches_shouldReturnPage_whenUserIsEditor() throws Exception {
+    @WithMockUser(authorities = { "CURATOR" })
+    void getBatches_shouldReturnPage_whenUserIsCurator() throws Exception {
         when(facade.searchBatches(ArgumentMatchers.any(BatchSearchRequest.class),
                 ArgumentMatchers.any(Pageable.class)))
                 .thenReturn(batchDtoPage);
@@ -67,17 +67,11 @@ class BatchControllerTest extends ControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = { "CURATOR" })
-    void getBatches_shouldReturnPage_whenUserIsCurator() throws Exception {
-        when(facade.searchBatches(ArgumentMatchers.any(BatchSearchRequest.class),
-                ArgumentMatchers.any(Pageable.class)))
-                .thenReturn(batchDtoPage);
-
+    @WithMockUser(authorities = { "EDITOR" })
+    void getBatches_shouldReturnForbidden_whenUserIsEditor() throws Exception {
         mockMvc.perform(get("/api/batches")
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isArray())
-                .andExpect(jsonPath("$.content.length()").value(1));
+                .andExpect(status().isForbidden());
     }
 
     @Test

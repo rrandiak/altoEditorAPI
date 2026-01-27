@@ -3,11 +3,8 @@ package cz.inovatika.altoEditor.domain.service;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 
 import java.util.Optional;
 
@@ -47,7 +44,7 @@ class DigitalObjectServiceTest {
 
     private final String PID = "pid1";
     private final int VERSION = 1;
-    private final int USER_ID = 10;
+    private final User USER = User.builder().id(10).build();
     private final int PERO_ID = 20;
     private final int ALTOEDITOR_ID = 30;
     private final byte[] CONTENT = "alto-content".getBytes();
@@ -55,73 +52,22 @@ class DigitalObjectServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        Mockito.when(userService.getSpecialUser(SpecialUser.PERO))
-                .thenReturn(User.builder().id(PERO_ID).build());
         Mockito.when(userService.getSpecialUser(SpecialUser.ALTOEDITOR))
                 .thenReturn(User.builder().id(ALTOEDITOR_ID).build());
+        Mockito.when(userService.getUserByUsername("pero"))
+                .thenReturn(User.builder().id(PERO_ID).build());
     }
 
     @Test
-    void findAlto_bySpecificVersion() {
-        DigitalObject obj = DigitalObject.builder().pid(PID).version(VERSION).userId(USER_ID).build();
-        Mockito.when(repository.findByPidAndVersionAndUsersWithPriority(eq(PID), eq(VERSION), eq(USER_ID), anyInt(),
-                anyInt()))
+    void findRelatedAlto_bySpecificVersion() {
+        DigitalObject obj = DigitalObject.builder().pid(PID).version(VERSION).user(USER).build();
+        Mockito.when(repository.findRelated(eq(PID), eq(USER.getId())))
                 .thenReturn(Optional.of(obj));
         Mockito.when(akubraService.retrieveDsBinaryContent(eq(PID), any(), eq(VERSION))).thenReturn(CONTENT);
 
-        DigitalObjectWithContent result = service.findAlto(PID, VERSION, USER_ID);
+        DigitalObjectWithContent result = service.findRelatedAlto(PID, USER.getId());
         assertNotNull(result);
         assertEquals(obj, result.getDigitalObject());
         assertArrayEquals(CONTENT, result.getContent());
-    }
-
-    @Test
-    void findAlto_byUser() {
-        DigitalObject obj = DigitalObject.builder().pid(PID).version(VERSION).userId(USER_ID).build();
-        Mockito.when(
-                repository.findByPidAndVersionAndUsersWithPriority(eq(PID), isNull(), eq(USER_ID), anyInt(), anyInt()))
-                .thenReturn(Optional.of(obj));
-        Mockito.when(akubraService.retrieveDsBinaryContent(eq(PID), any(), eq(VERSION))).thenReturn(CONTENT);
-
-        DigitalObjectWithContent result = service.findAlto(PID, null, USER_ID);
-        assertNotNull(result);
-        assertEquals(obj, result.getDigitalObject());
-        assertArrayEquals(CONTENT, result.getContent());
-    }
-
-    @Test
-    void findAlto_byPeroUser() {
-        DigitalObject obj = DigitalObject.builder().pid(PID).version(VERSION).userId(PERO_ID).build();
-        Mockito.when(repository.findByPidAndVersionAndUsersWithPriority(eq(PID), isNull(), eq(USER_ID), eq(PERO_ID),
-                anyInt()))
-                .thenReturn(Optional.of(obj));
-        Mockito.when(akubraService.retrieveDsBinaryContent(eq(PID), any(), eq(VERSION))).thenReturn(CONTENT);
-
-        DigitalObjectWithContent result = service.findAlto(PID, null, USER_ID);
-        assertNotNull(result);
-        assertEquals(obj, result.getDigitalObject());
-        assertArrayEquals(CONTENT, result.getContent());
-    }
-
-    @Test
-    void findAlto_byAltoEditorUser() {
-        DigitalObject obj = DigitalObject.builder().pid(PID).version(VERSION).userId(ALTOEDITOR_ID).build();
-        Mockito.when(repository.findByPidAndVersionAndUsersWithPriority(eq(PID), isNull(), eq(USER_ID), eq(PERO_ID),
-                eq(ALTOEDITOR_ID)))
-                .thenReturn(Optional.of(obj));
-        Mockito.when(akubraService.retrieveDsBinaryContent(eq(PID), any(), eq(VERSION))).thenReturn(CONTENT);
-
-        DigitalObjectWithContent result = service.findAlto(PID, null, USER_ID);
-        assertNotNull(result);
-        assertEquals(obj, result.getDigitalObject());
-        assertArrayEquals(CONTENT, result.getContent());
-    }
-
-    @Test
-    void findAlto_returnsNullIfNotFound() {
-        Mockito.when(repository.findByPidAndVersionAndUsersWithPriority(any(), any(), any(), anyInt(), anyInt()))
-                .thenReturn(Optional.empty());
-        DigitalObjectWithContent result = service.findAlto(PID, VERSION, USER_ID);
-        assertNull(result);
     }
 }

@@ -33,9 +33,9 @@ class UserControllerTest extends ControllerTest {
     @BeforeEach
     void setUp() {
         userDtoPage = new PageImpl<>(List.of(
-                UserDto.builder().id(1).login("user1").build(),
-                UserDto.builder().id(2).login("user2").build(),
-                UserDto.builder().id(3).login("user3").build()), PageRequest.of(0, 10), 1);
+                UserDto.builder().id(1).username("user1").build(),
+                UserDto.builder().id(2).username("user2").build(),
+                UserDto.builder().id(3).username("user3").build()), PageRequest.of(0, 10), 1);
     }
 
     @Test

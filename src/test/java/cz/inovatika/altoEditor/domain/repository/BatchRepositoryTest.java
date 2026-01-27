@@ -33,7 +33,7 @@ class BatchRepositoryTest {
         batch.setState(state);
         batch.setInstance(instance);
         batch.setPriority(BatchPriority.MEDIUM);
-        batch.setType(BatchType.SINGLE);
+        batch.setType(BatchType.GENERATE);
         return batch;
     }
 

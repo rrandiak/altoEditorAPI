@@ -49,7 +49,7 @@ class BatchServiceTest {
         testBatch.setPid("uuid:12345");
         testBatch.setState(BatchState.PLANNED);
         testBatch.setPriority(BatchPriority.MEDIUM);
-        testBatch.setType(BatchType.SINGLE);
+        testBatch.setType(BatchType.GENERATE);
         testBatch.setInstance("dk");
     }
 
@@ -217,37 +217,6 @@ class BatchServiceTest {
     }
 
     @Test
-    @DisplayName("Set run info should update estimated count and type")
-    void setRunInfo_shouldUpdateEstimatedCountAndType() {
-        // Given
-        Integer estimatedCount = 100;
-        BatchType type = BatchType.MULTIPLE;
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
-
-        // When
-        batchService.setRunInfo(testBatch, estimatedCount, type);
-
-        // Then
-        assertThat(testBatch.getEstimatedItemCount()).isEqualTo(estimatedCount);
-        assertThat(testBatch.getType()).isEqualTo(type);
-        verify(batchRepository).save(testBatch);
-    }
-
-    @Test
-    @DisplayName("Set run info should handle null estimated count")
-    void setRunInfo_shouldHandleNullEstimatedCount() {
-        // Given
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
-
-        // When
-        batchService.setRunInfo(testBatch, null, BatchType.MULTIPLE);
-
-        // Then
-        assertThat(testBatch.getEstimatedItemCount()).isNull();
-        verify(batchRepository).save(testBatch);
-    }
-
-    @Test
     @DisplayName("Search with all parameters should build correct specification")
     void search_shouldBuildCorrectSpecification() {
         // Given
@@ -259,7 +228,7 @@ class BatchServiceTest {
         LocalDateTime updatedAfter = LocalDateTime.now().minusDays(1);
         LocalDateTime updatedBefore = LocalDateTime.now();
         BatchPriority priority = BatchPriority.HIGH;
-        BatchType type = BatchType.SINGLE;
+        BatchType type = BatchType.GENERATE;
         String instanceId = "dk";
         Pageable pageable = PageRequest.of(0, 10);
 

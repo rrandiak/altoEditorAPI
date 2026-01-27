@@ -10,6 +10,7 @@ import lombok.Getter;
 @Builder
 public class KrameriusUser {
 
+    private final String uid;
     private final String username;
     private final List<Role> roles;
 

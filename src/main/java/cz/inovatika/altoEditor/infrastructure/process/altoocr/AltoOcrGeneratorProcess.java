@@ -3,7 +3,6 @@ package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 import cz.inovatika.altoEditor.config.properties.ProcessorsProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
-import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
@@ -78,13 +77,14 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             }
             DigitalObject obj = objOpt.get();
 
+            batchService.setEstimatedItemCount(batch, 1);
+
             // --- DOWNLOAD IMAGES ---
             // Download images from Kramerius and save them to workDir
             batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
 
             workDirectoryService.saveBytesToFile(workDir, "image.jpg",
                     krameriusService.getImageBytes(obj.getPid(), batch.getInstance(), userProfile.getToken()));
-            batchService.setRunInfo(batch, 1, BatchType.SINGLE);
 
             // --- GENERATE ALTO/OCR ---
             // Run selected engine to generate ALTO and OCR from downloaded images

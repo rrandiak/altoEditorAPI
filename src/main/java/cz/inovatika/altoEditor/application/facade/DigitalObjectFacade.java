@@ -2,15 +2,19 @@ package cz.inovatika.altoEditor.application.facade;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
+import java.util.ArrayList;
 import org.springframework.stereotype.Component;
 
+import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.DigitalObjectState;
 import cz.inovatika.altoEditor.domain.model.Batch;
-import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.service.DigitalObjectService;
+import cz.inovatika.altoEditor.domain.service.container.DigitalObjectUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.DigitalObjectWithContent;
+import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
 import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.DigitalObjectSearchRequest;
@@ -27,6 +31,10 @@ public class DigitalObjectFacade {
 
     private final DigitalObjectService service;
 
+    private final KrameriusService krameriusService;
+
+    private final KrameriusProperties krameriusConfig;
+
     private final UserContextService userContext;
 
     private final DigitalObjectMapper mapper;
@@ -39,19 +47,42 @@ public class DigitalObjectFacade {
 
     private final BatchMapper batchMapper;
 
-    public Page<DigitalObjectDto> searchRelatedDigitalObjects(DigitalObjectSearchRequest request, Pageable pageable) {
-        userContext.getUsername();
-        return service.search(request.getPid(), request.getUsername(),
+    public Page<DigitalObjectDto> searchRelated(DigitalObjectSearchRequest request, Pageable pageable) {
+        Integer currentUserId = userContext.getUserId();
+        List<Integer> users = request.getUsers() != null ? new ArrayList<>(request.getUsers()) : new ArrayList<>();
+        if (!users.contains(currentUserId)) {
+            users.add(currentUserId);
+        }
+
+        return service.search(
+                users,
+                request.getInstanceId(),
+                request.getTargetPid(),
+                request.getHierarchyPid(),
+                request.getLabel(),
+                request.getTitle(),
+                request.getCreatedAfter(),
+                request.getCreatedBefore(),
+                request.getStates(),
                 pageable).map(mapper::toDto);
     }
 
-    public Page<DigitalObjectDto> searchDigitalObjects(DigitalObjectSearchRequest request, Pageable pageable) {
-        return service.search(request.getPid(), request.getUsername(),
+    public Page<DigitalObjectDto> searchAll(DigitalObjectSearchRequest request, Pageable pageable) {
+        return service.search(
+                request.getUsers(),
+                request.getInstanceId(),
+                request.getTargetPid(),
+                request.getHierarchyPid(),
+                request.getLabel(),
+                request.getTitle(),
+                request.getCreatedAfter(),
+                request.getCreatedBefore(),
+                request.getStates(),
                 pageable).map(mapper::toDto);
     }
 
-    public DigitalObjectDto getDigitalObjectAlto(String pid, String instanceId, Integer version) {
-        DigitalObjectWithContent digitalObjectWithContent = service.findAlto(pid, version,
+    public DigitalObjectDto getRelatedAlto(String pid, String instanceId) {
+        DigitalObjectWithContent digitalObjectWithContent = service.findRelatedAlto(pid,
                 userContext.getUserId());
 
         if (digitalObjectWithContent == null) {
@@ -62,8 +93,14 @@ public class DigitalObjectFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public DigitalObjectDto getDigitalObjectOriginalAlto(String pid) {
-        DigitalObjectWithContent digitalObjectWithContent = service.getOriginalAlto(pid);
+    public DigitalObjectDto getAltoVersion(String pid, Integer version) {
+        DigitalObjectWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
+
+        return mapper.toDto(digitalObjectWithContent);
+    }
+
+    public DigitalObjectDto getActiveAlto(String pid) {
+        DigitalObjectWithContent digitalObjectWithContent = service.getActiveAlto(pid);
 
         return mapper.toDto(digitalObjectWithContent);
     }
@@ -75,12 +112,15 @@ public class DigitalObjectFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public String getDigitalObjectOcr(String pid, Integer version) {
-        return service.getOcr(pid, version, userContext.getUserId());
+    public String getOcr(Integer objectId) {
+        return service.getOcr(objectId);
     }
 
-    public byte[] getKrameriusObjectImage(String pid, String instanceId) {
-        return service.getKrameriusObjectImage(pid, instanceId, userContext.getToken());
+    public byte[] getImage(String pid, String instanceId) {
+        return service.getKrameriusObjectImage(
+                pid,
+                instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId(),
+                userContext.getToken());
     }
 
     public BatchDto generateAlto(String pid, BatchPriority priority) {
@@ -94,12 +134,20 @@ public class DigitalObjectFacade {
         return batchMapper.toDto(batch);
     }
 
-    public void acceptDigitalObject(int objectId) {
-        service.setStateForObject(objectId, DigitalObjectState.ACCEPTED);
+    public void setActive(int objectId) {
+        DigitalObjectUploadContent content = service.getDigitalObjectUploadContent(objectId);
+
+        krameriusService.uploadAltoOcr(content.getPid(), content.getInstance(), content.getAltoContent(),
+                content.getOcrContent(), userContext.getToken());
+
+        service.setObjectActive(objectId);
     }
 
-    public void rejectDigitalObject(int objectId) {
+    public void reject(int objectId) {
         service.setStateForObject(objectId, DigitalObjectState.REJECTED);
     }
 
+    public void archive(int objectId) {
+        service.setStateForObject(objectId, DigitalObjectState.ARCHIVED);
+    }
 }

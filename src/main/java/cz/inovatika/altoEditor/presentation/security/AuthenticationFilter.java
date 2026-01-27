@@ -46,7 +46,8 @@ public class AuthenticationFilter extends OncePerRequestFilter {
 
                 UserProfile profile = new UserProfile(
                         token,
-                        userRepository.findByLogin(user.getUsername()).map(u -> u.getId()).orElse(null),
+                        userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null),
+                        user.getUid(),
                         user.getUsername(),
                         user.getRoles());
 

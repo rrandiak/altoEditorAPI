@@ -22,5 +22,5 @@ public class DigitalObjectSearchRequest {
     private LocalDateTime createdAfter;
     private LocalDateTime createdBefore;
 
-    private List<DigitalObjectState> state;
+    private List<DigitalObjectState> states;
 }

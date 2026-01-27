@@ -89,7 +89,7 @@ public class BatchControllerIT {
         batch1.setState(BatchState.PLANNED);
         batch1.setSubstate(BatchSubstate.DOWNLOADING);
         batch1.setPriority(BatchPriority.MEDIUM);
-        batch1.setType(BatchType.MULTIPLE);
+        batch1.setType(BatchType.GENERATE);
         batch1.setInstance("instance1");
         batch1.setObjectId(100);
         batch1.setEstimatedItemCount(10);
@@ -102,7 +102,7 @@ public class BatchControllerIT {
         batch2.setState(BatchState.RUNNING);
         batch2.setSubstate(BatchSubstate.GENERATING);
         batch2.setPriority(BatchPriority.HIGH);
-        batch2.setType(BatchType.SINGLE);
+        batch2.setType(BatchType.RETRIEVE_HIERARCHY);
         batch2.setInstance("instance2");
         batch2.setObjectId(200);
         batch2.setEstimatedItemCount(20);
@@ -153,7 +153,7 @@ public class BatchControllerIT {
     @Test
     void getBatches_filterByType_returnsOnlyMatching() throws Exception {
         mockMvc.perform(get("/api/batches")
-                .param("type", "MULTIPLE")
+                .param("type", "GENERATE")
                 .with(user("testuser").authorities(new SimpleGrantedAuthority("CURATOR")))
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

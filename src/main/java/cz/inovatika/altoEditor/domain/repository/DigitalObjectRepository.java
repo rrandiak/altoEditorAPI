@@ -19,7 +19,7 @@ public interface DigitalObjectRepository
     /**
      * Find all digital objects by PID
      */
-    List<DigitalObject> findByPid(String pid);
+    List<DigitalObject> findAllByPid(String pid);
 
     /**
      * Check if any digital object exists with the given PID
@@ -27,24 +27,30 @@ public interface DigitalObjectRepository
     boolean existsByPid(String pid);
 
     /**
+     * Find active digital objects by PID
+     */
+    @Query("""
+                SELECT d
+                FROM DigitalObject d
+                WHERE d.pid = :pid
+                AND d.state = DigitalObjectState.ACTIVE
+            """)
+    Optional<DigitalObject> findActive(@Param("pid") String pid);
+
+    /**
      * Find digital object by PID and user ID
      */
     Optional<DigitalObject> findByPidAndUserId(String pid, Integer userId);
 
     /**
-     * Find all digital objects by PID and user ID
+     * Find digital object by PID and version
      */
-    List<DigitalObject> findAllByPidAndUserId(String pid, Integer userId);
+    Optional<DigitalObject> findByPidAndVersion(String pid, Integer version);
 
     /**
      * Find digital object by PID and instance ID
      */
     Optional<DigitalObject> findByPidAndInstanceId(String pid, String instanceId);
-
-    /**
-     * Find digital object by PID, user ID, and version
-     */
-    Optional<DigitalObject> findByPidAndUserIdAndVersion(String pid, Integer userId, Integer version);
 
     /**
      * Find the digital object with the highest version for the given PID
@@ -54,61 +60,23 @@ public interface DigitalObjectRepository
     /**
      * Find digital object by PID with priority ordering based on version and user
      * type.
-     * Priority order:
-     * 1. Matching version
-     * 2. Current user's objects
-     * 3. PERO user's objects
-     * 4. ALTO_EDITOR user's objects
+     * The digital object is retrieved in the following order:
+     * 1. The version owned by the current user.
+     * 2. The version currently in 'ACTIVE' state.
      */
     @Query("""
                 SELECT d
                 FROM DigitalObject d
                 WHERE d.pid = :pid
-                    AND d.userId IN (:currentUser, :peroUser, :altoEditorUser)
+                    AND (d.user.id = :userId
+                        OR d.state = DigitalObjectState.ACTIVE)
                 ORDER BY CASE
-                    WHEN :version IS NOT NULL AND d.version = :version THEN 0
-                    WHEN d.userId = :currentUser THEN 1
-                    WHEN d.userId = :peroUser THEN 2
-                    WHEN d.userId = :altoEditorUser THEN 3
-                    ELSE 4
+                    WHEN d.user.id = :userId THEN 0
+                    ELSE 1
                 END
                 LIMIT 1
             """)
-    Optional<DigitalObject> findByPidAndVersionAndUsersWithPriority(
+    Optional<DigitalObject> findRelated(
             @Param("pid") String pid,
-            @Param("version") Integer version,
-            @Param("currentUser") Integer currentUser,
-            @Param("peroUser") Integer peroUser,
-            @Param("altoEditorUser") Integer altoEditorUser);
-
-    /**
-     * Find the best candidate for update based on state and user priority.
-     * Priority order:
-     * 1. User's own NEW or EDITED objects
-     * 2. UPLOADED objects (any user)
-     * 3. ALTO user's NEW objects
-     * Within same priority, orders by most recent update
-     */
-    @Query("""
-                SELECT d FROM DigitalObject d
-                WHERE d.pid = :pid
-                    AND (
-                        (d.userId = :userId AND d.state IN (DigitalObjectState.NEW, DigitalObjectState.EDITED))
-                        OR d.state = DigitalObjectState.UPLOADED
-                        OR (d.userId = :altoUserId AND d.state = DigitalObjectState.NEW)
-                    )
-                ORDER BY
-                    CASE
-                        WHEN d.userId = :userId AND d.state IN (DigitalObjectState.NEW, DigitalObjectState.EDITED) THEN 0
-                        WHEN d.state = DigitalObjectState.UPLOADED THEN 1
-                        WHEN d.userId = :altoUserId AND d.state = DigitalObjectState.NEW THEN 2
-                        ELSE 3
-                    END,
-                    d.date DESC
-                LIMIT 1
-            """)
-    Optional<DigitalObject> findUpdateCandidate(
-            @Param("pid") String pid,
-            @Param("userId") Integer userId,
-            @Param("altoUserId") Integer altoUserId);
+            @Param("userId") Integer userId);
 }

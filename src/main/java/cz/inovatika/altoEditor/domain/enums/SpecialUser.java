@@ -4,8 +4,7 @@ import lombok.Getter;
 
 @Getter
 public enum SpecialUser {
-    ALTOEDITOR("altoeditor"),
-    PERO("pero");
+    ALTOEDITOR("altoeditor");
 
     private final String username;
 

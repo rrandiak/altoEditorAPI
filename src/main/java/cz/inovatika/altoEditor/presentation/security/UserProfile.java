@@ -12,6 +12,7 @@ public class UserProfile {
     
     private String token;
     private Integer userId;
+    private String uid;
     private String username;
     private List<Role> roles;
 }

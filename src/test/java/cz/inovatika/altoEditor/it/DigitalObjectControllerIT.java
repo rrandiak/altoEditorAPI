@@ -5,8 +5,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +66,9 @@ public class DigitalObjectControllerIT {
     private static final int TEST_VERSION = 0;
     private static final String TEST_ALTO_XML = "<alto><Layout><Page><PrintSpace><TextBlock><TextLine><String CONTENT=\"Test OCR content\"/></TextLine></TextBlock></PrintSpace></Page></Layout></alto>";
     private static final byte[] TEST_ALTO = TEST_ALTO_XML.getBytes(StandardCharsets.UTF_8);
+    private final String TEST_ALTO_PATH = "05/61/38/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FALTO%2FALTO.0";
+    private final String TEST_OCR_PATH = "bd/af/f9/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FTEXT%5FOCR%2FTEXT%5FOCR.0";
+    private final String TEST_INSTANCE = "test";
     private static final byte[] TEST_IMAGE = new byte[] { 1, 2, 3 };
 
     private DigitalObject testDigitalObject;
@@ -80,9 +85,9 @@ public class DigitalObjectControllerIT {
     // Helper to inject a UserProfile as principal
     private RequestPostProcessor userProfile() {
         Integer userId = testUser.getId();
-        String username = testUser.getLogin();
+        String username = testUser.getUsername();
         List<Role> roles = List.of(Role.CURATOR);
-        UserProfile profile = new UserProfile("dummy-token", userId, username, roles);
+        UserProfile profile = new UserProfile("dummy-token", userId, null, username, roles);
         List<SimpleGrantedAuthority> authorities = roles.stream()
                 .map(r -> new SimpleGrantedAuthority(r.toString()))
                 .toList();
@@ -100,34 +105,34 @@ public class DigitalObjectControllerIT {
     @BeforeEach
     void setUpData() {
         userRepository.deleteAll();
-        testUser = userRepository.save(User.builder().login("testuser").build());
+        testUser = userRepository.save(User.builder().username("testuser").build());
 
-        User altoUser = userRepository.save(User.builder().login("altoeditor").build());
-        userRepository.save(User.builder().login("pero").build());
+        User altoUser = userRepository.save(User.builder().username("altoeditor").build());
+        userRepository.save(User.builder().username("pero").build());
 
         digitalObjectRepository.deleteAll();
         testDigitalObject = digitalObjectRepository.save(DigitalObject.builder()
                 .pid(TEST_PID)
                 .version(TEST_VERSION)
                 .label("Test Label")
-                .state(DigitalObjectState.EDITED)
+                .state(DigitalObjectState.PENDING)
                 .instanceId("test")
-                .userId(testUser.getId())
+                .user(testUser)
                 .build());
 
         digitalObjectRepository.save(DigitalObject.builder()
                 .pid(TEST_PID)
                 .version(TEST_VERSION + 1)
                 .label("Test Label")
-                .state(DigitalObjectState.NEW)
+                .state(DigitalObjectState.ACTIVE)
                 .instanceId("test")
-                .userId(altoUser.getId())
+                .user(altoUser)
                 .build());
     }
 
     @Test
     void getDigitalObjects_returnsOkAndPage() throws Exception {
-        mockMvc.perform(get("/api/objects")
+        mockMvc.perform(get("/api/objects/search-all")
                 .with(userProfile())
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -135,9 +140,9 @@ public class DigitalObjectControllerIT {
     }
 
     @Test
-    void getDigitalObjectAlto_returnsOkAndContent() throws Exception {
+    void getRelatedAlto_returnsOkAndContent() throws Exception {
         akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        mockMvc.perform(get("/api/objects/" + TEST_PID + "/alto")
+        mockMvc.perform(get("/api/objects/" + TEST_PID + "/related-alto")
                 .with(userProfile())
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -145,19 +150,8 @@ public class DigitalObjectControllerIT {
     }
 
     @Test
-    void getDigitalObjectAltoOriginal_returnsOkAndContent() throws Exception {
-        akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        akubraService.saveAltoContent(TEST_PID, 1, TEST_ALTO);
-        mockMvc.perform(get("/api/objects/" + TEST_PID + "/original-alto")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pid").value(TEST_PID));
-    }
-
-    @Test
-    void newAltoVersion_returnsOkAndContent() throws Exception {
-        mockMvc.perform(post("/api/objects/" + TEST_PID + "/alto")
+    void getRelatedAlto_fetchesNewVersion_returnsOkAndContent() throws Exception {
+        mockMvc.perform(get("/api/objects/" + TEST_PID + "/related-alto")
                 .with(userProfile())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(TEST_ALTO))
@@ -166,9 +160,20 @@ public class DigitalObjectControllerIT {
     }
 
     @Test
+    void getDigitalObjectAltoOriginal_returnsOkAndContent() throws Exception {
+        akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
+        akubraService.saveAltoContent(TEST_PID, 1, TEST_ALTO);
+        mockMvc.perform(get("/api/objects/" + TEST_PID + "/active-alto")
+                .with(userProfile())
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pid").value(TEST_PID));
+    }
+
+    @Test
     void getDigitalObjectOcr_returnsOkAndContent() throws Exception {
         akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        mockMvc.perform(get("/api/objects/" + TEST_PID + "/ocr")
+        mockMvc.perform(get("/api/objects/" + testDigitalObject.getId() + "/ocr")
                 .with(userProfile())
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
@@ -192,11 +197,34 @@ public class DigitalObjectControllerIT {
     }
 
     @Test
-    void acceptDigitalObject_returnsOk() throws Exception {
-        mockMvc.perform(post("/api/objects/" + testDigitalObject.getId() + "/accept")
+    void setDigitalObjectActive_returnsOk() throws Exception {
+        File altoFile = storeDir.resolve(TEST_ALTO_PATH).toFile();
+        altoFile.getParentFile().mkdirs();
+        byte[] altoContent = new byte[] { 0x41, 0x4C, 0x54, 0x4F }; // "ALTO" in ASCII
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(altoFile)) {
+            fos.write(altoContent);
+        }
+
+        File ocrFile = storeDir.resolve(TEST_OCR_PATH).toFile();
+        ocrFile.getParentFile().mkdirs();
+        byte[] ocrContent = new byte[] { 0x4F, 0x43, 0x52 }; // "OCR" in ASCII
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(ocrFile)) {
+            fos.write(ocrContent);
+        }
+
+        mockMvc.perform(post("/api/objects/" + testDigitalObject.getId() + "/set-active")
                 .with(userProfile())
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
+
+        // Verify that KrameriusService.uploadAltoOcr was called with the expected
+        // content
+        Mockito.verify(krameriusService).uploadAltoOcr(
+                Mockito.eq(TEST_PID),
+                Mockito.eq(TEST_INSTANCE),
+                Mockito.argThat(bytes -> Arrays.equals(bytes, altoContent)),
+                Mockito.argThat(bytes -> Arrays.equals(bytes, ocrContent)),
+                Mockito.any());
     }
 
     @Test

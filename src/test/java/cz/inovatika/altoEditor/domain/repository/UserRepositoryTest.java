@@ -31,16 +31,16 @@ class UserRepositoryTest {
     }
 
     @Test
-    @DisplayName("Find by login should return user when exists")
-    void findByLogin_shouldReturnUser_whenExists() {    
+    @DisplayName("Find by username should return user when exists")
+    void findByUsername_shouldReturnUser_whenExists() {    
         // Given
-        User user1 = User.builder().login("testuser").build();
-        User user2 = User.builder().login("anotheruser").build();
+        User user1 = User.builder().username("testuser").build();
+        User user2 = User.builder().username("anotheruser").build();
         repository.saveAll(List.of(user1, user2));
         entityManager.flush();
 
         // When
-        Optional<User> found = repository.findByLogin("testuser");
+        Optional<User> found = repository.findByUsername("testuser");
 
         // Then
         assertThat(found).isPresent();
@@ -48,35 +48,35 @@ class UserRepositoryTest {
     }
 
     @Test
-    @DisplayName("Find by login should return empty when user does not exist")
-    void findByLogin_shouldReturnEmpty_whenNotExists() {
+    @DisplayName("Find by username should return empty when user does not exist")
+    void findByUsername_shouldReturnEmpty_whenNotExists() {
         // When
-        Optional<User> found = repository.findByLogin("nonexistent");
+        Optional<User> found = repository.findByUsername("nonexistent");
 
         // Then
         assertThat(found).isNotPresent();
     }
 
     @Test
-    @DisplayName("Exists by login should return true when user exists")
-    void existsByLogin_shouldReturnTrue_whenExists() {
+    @DisplayName("Exists by username should return true when user exists")
+    void existsByUsername_shouldReturnTrue_whenExists() {
         // Given
-        User user = User.builder().login("existinguser").build();
+        User user = User.builder().username("existinguser").build();
         repository.save(user);
         entityManager.flush();
 
         // When
-        boolean exists = repository.existsByLogin("existinguser");
+        boolean exists = repository.existsByUsername("existinguser");
 
         // Then
         assertThat(exists).isTrue();
     }
 
     @Test
-    @DisplayName("Exists by login should return false when user does not exist")
-    void existsByLogin_shouldReturnFalse_whenNotExists() {
+    @DisplayName("Exists by username should return false when user does not exist")
+    void existsByUsername_shouldReturnFalse_whenNotExists() {
         // When
-        boolean exists = repository.existsByLogin("nonexistentuser");
+        boolean exists = repository.existsByUsername("nonexistentuser");
 
         // Then
         assertThat(exists).isFalse();

@@ -55,23 +55,18 @@ public class AppInitializer {
     }
 
     private void initAltoeditorUsers() {
-        if (userRepository.findSpecialUser(SpecialUser.PERO).isEmpty()) {
-            userRepository.save(User.builder()
-                    .login(SpecialUser.PERO.name())
-                    .build());
-        }
         if (userRepository.findSpecialUser(SpecialUser.ALTOEDITOR).isEmpty()) {
             userRepository.save(User.builder()
-                    .login(SpecialUser.ALTOEDITOR.name())
+                    .username(SpecialUser.ALTOEDITOR.name())
                     .build());
         }
     }
 
     private void initProcessorUsers() {
         processorsProperties.getProcessors().forEach((name, config) -> {
-            if (userRepository.findByLogin(name).isEmpty()) {
+            if (userRepository.findByUsername(name).isEmpty()) {
                 userRepository.save(User.builder()
-                        .login(name)
+                        .username(name)
                         .build());
             }
         });

@@ -16,6 +16,7 @@ import org.fcrepo.server.errors.LowlevelStorageException;
 import org.fcrepo.server.storage.lowlevel.akubra.AkubraLowlevelStorage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.xml.sax.SAXException;
 import org.akubraproject.BlobStore;
 import org.akubraproject.fs.FSBlobStore;
 import org.akubraproject.map.IdMapper;
@@ -28,16 +29,22 @@ import javax.xml.bind.Unmarshaller;
 
 import cz.inovatika.altoEditor.config.properties.StoreProperties;
 import cz.inovatika.altoEditor.domain.enums.Datastream;
+import cz.inovatika.altoEditor.exception.AkubraStorageException;
+import cz.inovatika.altoEditor.exception.InvalidAltoXmlException;
+import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 
 @Service
 public class AkubraService {
 
     private final AkubraLowlevelStorage storage;
 
+    @Autowired
+    private final AltoXmlService altoXmlService;
+    
     private final BlockingQueue<Unmarshaller> unmarshallerPool;
 
     @Autowired
-    public AkubraService(StoreProperties config) {
+    public AkubraService(StoreProperties config, AltoXmlService altoXmlService) {
         BlobStore dsStore;
         try {
             BlobStore fsDsStore = new FSBlobStore(new URI("urn:example.org:fsDatastreamStore"),
@@ -50,6 +57,8 @@ public class AkubraService {
         }
 
         this.storage = new AkubraLowlevelStorage(null, dsStore, false, true);
+
+        this.altoXmlService = altoXmlService;
 
         this.unmarshallerPool = new LinkedBlockingQueue<>(config.getUnmarshallerPoolSize());
 
@@ -123,7 +132,16 @@ public class AkubraService {
     }
 
     public void saveAltoContent(String pid, int version, byte[] bytes) {
-        // TODO: Check if its ALTO datastream
+        try {
+            if (!altoXmlService.isAlto(bytes)) {
+                throw new InvalidAltoXmlException("Provided XML is not valid ALTO.");
+            }
+        } catch (SAXException e) {
+            throw new InvalidAltoXmlException("Provided XML is not valid ALTO.", e);
+        } catch (IOException e) {
+            throw new AkubraStorageException("Error during ALTO XML validation.", e);
+        }
+
         saveDatastreamContent(pid, Datastream.ALTO, version, bytes);
     }
 
@@ -149,9 +167,6 @@ public class AkubraService {
             }
 
             return buffer.toByteArray();
-            // byte[] base64Bytes = buffer.toByteArray();
-
-            // return Base64.getDecoder().decode(base64Bytes);
         } catch (LowlevelStorageException | IOException e) {
             throw new RuntimeException(e);
         }

@@ -64,7 +64,21 @@ public class DigitalObjectControllerIT {
 
     private static final String TEST_PID = "uuid:12345678-1234-1234-1234-1234567890ab";
     private static final int TEST_VERSION = 0;
-    private static final String TEST_ALTO_XML = "<alto><Layout><Page><PrintSpace><TextBlock><TextLine><String CONTENT=\"Test OCR content\"/></TextLine></TextBlock></PrintSpace></Page></Layout></alto>";
+    private static final String TEST_ALTO_XML = """
+            <alto xmlns="http://www.loc.gov/standards/alto/ns-v2#">
+              <Layout>
+                <Page ID="P1" PHYSICAL_IMG_NR="1">
+                  <PrintSpace HEIGHT="1000" WIDTH="800" HPOS="0" VPOS="0">
+                    <TextBlock ID="TB1" HEIGHT="200" WIDTH="600" HPOS="100" VPOS="100">
+                      <TextLine HEIGHT="50" WIDTH="500" HPOS="150" VPOS="150">
+                        <String CONTENT="Test OCR content"/>
+                      </TextLine>
+                    </TextBlock>
+                  </PrintSpace>
+                </Page>
+              </Layout>
+            </alto>
+            """;
     private static final byte[] TEST_ALTO = TEST_ALTO_XML.getBytes(StandardCharsets.UTF_8);
     private final String TEST_ALTO_PATH = "05/61/38/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FALTO%2FALTO.0";
     private final String TEST_OCR_PATH = "bd/af/f9/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FTEXT%5FOCR%2FTEXT%5FOCR.0";

@@ -20,7 +20,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.ServletException;
 
-// TODO: Add caching of user info to reduce calls to Kramerius
 @Component
 @RequiredArgsConstructor
 public class AuthenticationFilter extends OncePerRequestFilter {
@@ -41,31 +40,26 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
 
-            try {
-                KrameriusUser user = authClientFactory.getClient().getUser(token);
+            KrameriusUser user = authClientFactory.getClient().getUser(token);
 
-                UserProfile profile = new UserProfile(
-                        token,
-                        userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null),
-                        user.getUid(),
-                        user.getUsername(),
-                        user.getRoles());
+            UserProfile profile = new UserProfile(
+                    token,
+                    userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null),
+                    user.getUid(),
+                    user.getUsername(),
+                    user.getRoles());
 
-                List<SimpleGrantedAuthority> authorities = profile.getRoles().stream()
-                        .map(Role::toString)
-                        .map(SimpleGrantedAuthority::new)
-                        .toList();
+            List<SimpleGrantedAuthority> authorities = profile.getRoles().stream()
+                    .map(Role::toString)
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
 
-                Authentication auth = new UsernamePasswordAuthenticationToken(
-                        profile,
-                        token,
-                        authorities);
+            Authentication auth = new UsernamePasswordAuthenticationToken(
+                    profile,
+                    token,
+                    authorities);
 
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            } catch (Exception e) {
-                // TODO: log and exception
-                // invalid token → ignore, user stays unauthenticated
-            }
+            SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
         filterChain.doFilter(request, response);

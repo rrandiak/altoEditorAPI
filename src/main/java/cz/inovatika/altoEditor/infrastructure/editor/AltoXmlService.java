@@ -1,7 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.editor;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -126,13 +126,13 @@ public class AltoXmlService {
         return null;
     }
 
-    public boolean isAlto(String altoXml) throws SAXException, IOException {
+    public boolean isAlto(byte[] altoXml) throws SAXException, IOException {
         List<SAXException> errors = new ArrayList<>();
 
         for (Schema schema : schemas) {
             try {
                 Validator validator = schema.newValidator();
-                validator.validate(new StreamSource(new StringReader(altoXml)));
+                validator.validate(new StreamSource(new ByteArrayInputStream(altoXml)));
                 return true;
             } catch (SAXException ex) {
                 errors.add(ex);

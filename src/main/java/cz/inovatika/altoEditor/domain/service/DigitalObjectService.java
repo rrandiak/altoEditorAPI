@@ -22,6 +22,11 @@ import cz.inovatika.altoEditor.domain.service.container.DigitalObjectWithContent
 import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
+
+import cz.inovatika.altoEditor.exception.DigitalObjectAlreadyExistsException;
+import cz.inovatika.altoEditor.exception.AltoNotFoundException;
+import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
+import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -95,7 +100,7 @@ public class DigitalObjectService {
 
     public DigitalObjectWithContent fetchNewAlto(String pid, String instanceId, Integer userId, String token) {
         if (repository.existsByPid(pid)) {
-            throw new RuntimeException("Digital object with PID already exists: " + pid);
+            throw new DigitalObjectAlreadyExistsException("Digital object with PID already exists: " + pid);
         }
 
         byte[] foxml = krameriusService.getFoxmlBytes(pid, instanceId, token);
@@ -103,7 +108,7 @@ public class DigitalObjectService {
         byte[] alto = akubraService.getLatestDsVersionBinaryContent(foxml, Datastream.ALTO);
 
         if (alto == null) {
-            throw new RuntimeException("ALTO datastream not found in FOXML for PID: " + pid);
+            throw new AltoNotFoundException("ALTO datastream not found in FOXML for PID: " + pid);
         }
 
         Optional<DigitalObject> maxVersionObj = repository.findFirstByPidOrderByVersionDesc(pid);
@@ -111,7 +116,7 @@ public class DigitalObjectService {
         DigitalObject obj = repository.save(
                 DigitalObject.builder().user(userRepository.findById(userId).orElse(null))
                         .instanceId(instanceId).pid(pid)
-                        .version(maxVersionObj.map(DigitalObject::getVersion).orElse(0)).build());
+                        .version(maxVersionObj.map(o -> o.getVersion() + 1).orElse(0)).build());
 
         byte[] content = akubraService.retrieveDsBinaryContent(
                 obj.getPid(),
@@ -128,8 +133,7 @@ public class DigitalObjectService {
                 .findFirst();
 
         if (digitalObject.isEmpty()) {
-            // TODO: specific exception
-            throw new RuntimeException("ALTO version not found for PID: " + pid + " and version: " + version);
+            throw new AltoVersionNotFoundException("ALTO version not found for PID: " + pid + " and version: " + version);
         }
 
         DigitalObject obj = digitalObject.get();
@@ -149,8 +153,7 @@ public class DigitalObjectService {
                 .findFirst();
 
         if (digitalObject.isEmpty()) {
-            // TODO: specific exception
-            throw new RuntimeException("Original ALTO not found for PID: " + pid);
+            throw new AltoVersionNotFoundException("Original ALTO not found for PID: " + pid);
         }
 
         DigitalObject obj = digitalObject.get();
@@ -169,8 +172,7 @@ public class DigitalObjectService {
                 .findFirst();
 
         if (objOpt.isEmpty()) {
-            // TODO: specific exception
-            throw new RuntimeException("Digital object not found for PID: " + pid);
+            throw new DigitalObjectNotFoundException("Digital object not found for PID: " + pid);
         }
 
         DigitalObject obj = objOpt.get();
@@ -196,8 +198,7 @@ public class DigitalObjectService {
         Optional<DigitalObject> objOpt = repository.findRelated(pid, userId);
 
         if (objOpt.isEmpty()) {
-            // TODO: specific exception
-            throw new RuntimeException("No ALTO version available for update for PID: " + pid);
+            throw new AltoNotFoundException("No ALTO version available for update for PID: " + pid);
         }
 
         akubraService.saveAltoContent(
@@ -231,8 +232,7 @@ public class DigitalObjectService {
         Optional<DigitalObject> objOpt = repository.findById(objectId);
 
         if (objOpt.isEmpty()) {
-            // TODO: specific exception
-            throw new RuntimeException("Digital object not found for ID: " + objectId);
+            throw new DigitalObjectNotFoundException("Digital object not found for ID: " + objectId);
         }
 
         DigitalObject obj = objOpt.get();

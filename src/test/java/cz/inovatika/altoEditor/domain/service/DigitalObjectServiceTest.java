@@ -3,8 +3,10 @@ package cz.inovatika.altoEditor.domain.service;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
@@ -15,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import cz.inovatika.altoEditor.domain.enums.Datastream;
 import cz.inovatika.altoEditor.domain.enums.SpecialUser;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.model.User;
@@ -69,5 +72,49 @@ class DigitalObjectServiceTest {
         assertNotNull(result);
         assertEquals(obj, result.getDigitalObject());
         assertArrayEquals(CONTENT, result.getContent());
+    }
+
+    @Test
+    void fetchNewAlto_createsNewDigitalObjectAndReturnsContent() {
+        String pid = "pid1";
+        String instanceId = "inst1";
+        Integer userId = 42;
+        String token = "tok";
+        byte[] foxml = new byte[] { 1, 2, 3 };
+        byte[] alto = new byte[] { 4, 5, 6 };
+        User owner = User.builder().id(userId).build();
+        DigitalObject saved = DigitalObject.builder().pid(pid).instanceId(instanceId).version(0).user(owner).build();
+
+        when(repository.existsByPid(pid)).thenReturn(false);
+        when(krameriusService.getFoxmlBytes(pid, instanceId, token)).thenReturn(foxml);
+        when(akubraService.getLatestDsVersionBinaryContent(foxml, Datastream.ALTO)).thenReturn(alto);
+        when(repository.findFirstByPidOrderByVersionDesc(pid)).thenReturn(Optional.empty());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(owner));
+        when(repository.save(any(DigitalObject.class))).thenReturn(saved);
+        when(akubraService.retrieveDsBinaryContent(pid, Datastream.ALTO, 0)).thenReturn(alto);
+
+        var result = service.fetchNewAlto(pid, instanceId, userId, token);
+        assertNotNull(result);
+        assertEquals(saved, result.getDigitalObject());
+        assertArrayEquals(alto, result.getContent());
+    }
+
+    @Test
+    void fetchNewAlto_throwsIfExists() {
+        when(repository.existsByPid("pid1")).thenReturn(true);
+        assertThrows(RuntimeException.class, () -> service.fetchNewAlto("pid1", "inst", 1, "tok"));
+    }
+
+    @Test
+    void fetchNewAlto_throwsIfNoAlto() {
+        String pid = "pid1";
+        String instanceId = "inst1";
+        Integer userId = 42;
+        String token = "tok";
+        byte[] foxml = new byte[] { 1, 2, 3 };
+        when(repository.existsByPid(pid)).thenReturn(false);
+        when(krameriusService.getFoxmlBytes(pid, instanceId, token)).thenReturn(foxml);
+        when(akubraService.getLatestDsVersionBinaryContent(foxml, Datastream.ALTO)).thenReturn(null);
+        assertThrows(RuntimeException.class, () -> service.fetchNewAlto(pid, instanceId, userId, token));
     }
 }

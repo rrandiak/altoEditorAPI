@@ -44,7 +44,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             UserProfile userProfile,
             ProcessorsProperties.ProcessorConfig generatorConfig) {
 
-        super(batch);
+        super(batch.getId(), batch.getPriority(), batch.getCreateDate());
 
         this.workDirectoryService = workDirectoryService;
         this.batchService = batchService;
@@ -57,6 +57,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
     @Override
     public void run() {
+        Batch batch = batchService.getById(batchId);
         File workDir = null;
 
         try {
@@ -121,7 +122,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             batchService.setState(batch, BatchState.DONE);
 
         } catch (Exception ex) {
-            LOGGER.error("Batch " + this.batch.getId() + " failed: " + ex.getMessage(), ex);
+            LOGGER.error("Batch " + batch.getId() + " failed: " + ex.getMessage(), ex);
 
             try {
                 batchService.setFailed(batch, "Batch " + batch.getId() + " failed: " + ex.getMessage());

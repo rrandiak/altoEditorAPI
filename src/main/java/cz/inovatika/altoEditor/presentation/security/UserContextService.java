@@ -5,6 +5,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import cz.inovatika.altoEditor.domain.enums.Role;
+import cz.inovatika.altoEditor.exception.UnauthorizedUserException;
 
 @Service
 public class UserContextService {
@@ -16,9 +17,7 @@ public class UserContextService {
             return (UserProfile) authentication.getPrincipal();
         }
         
-        // TODO: Replace with proper exception handling
-        throw new RuntimeException("No authenticated user found");
-        // throw new UnauthorizedException("User not authenticated");
+        throw new UnauthorizedUserException("No authenticated user found");
     }
     
     public String getToken() {

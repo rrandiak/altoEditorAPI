@@ -3,27 +3,16 @@ package cz.inovatika.altoEditor.infrastructure.process.templates;
 import java.time.LocalDateTime;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
-import cz.inovatika.altoEditor.domain.model.Batch;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
+@Getter
+@AllArgsConstructor
 public abstract class BatchProcess implements Runnable, Comparable<BatchProcess> {
 
-    protected final Batch batch;
-
-    protected BatchProcess(Batch batch) {
-        this.batch = batch;
-    }
-
-    public Batch getBatch() {
-        return batch;
-    }
-
-    public BatchPriority getPriority() {
-        return batch.getPriority();
-    }
-
-    public LocalDateTime getCreatedDate() {
-        return batch.getCreateDate();
-    }
+    protected final Integer batchId;
+    protected final BatchPriority priority;
+    protected final LocalDateTime createdDate;
 
     @Override
     public final int compareTo(BatchProcess other) {

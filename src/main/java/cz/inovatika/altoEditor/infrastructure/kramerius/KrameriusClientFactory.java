@@ -4,6 +4,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
+import cz.inovatika.altoEditor.exception.KrameriusInstanceNotConfiguredException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.K7Client;
 import lombok.RequiredArgsConstructor;
 
@@ -19,8 +20,7 @@ public class KrameriusClientFactory {
         KrameriusProperties.KrameriusInstance instance = config.getKrameriusInstances().get(instanceId);
 
         if (instance == null) {
-            // TODO: throw proper exception
-            throw new IllegalArgumentException("Kramerius instance with ID " + instanceId + " not found");
+            throw new KrameriusInstanceNotConfiguredException("Kramerius instance with ID " + instanceId + " not found");
         }
 
         return new K7Client(instance, restTemplateBuilder.build());

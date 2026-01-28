@@ -16,6 +16,7 @@ import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.repository.spec.BatchSpecifications;
+import cz.inovatika.altoEditor.exception.BatchNotFoundException;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -23,6 +24,11 @@ import lombok.RequiredArgsConstructor;
 public class BatchService {
 
     private final BatchRepository repository;
+
+    public Batch getById(Integer batchId) {
+    return repository.findById(batchId)
+        .orElseThrow(() -> new BatchNotFoundException(batchId));
+    }
 
     @Transactional(readOnly = true)
     public List<Batch> findWaitingBatches() {

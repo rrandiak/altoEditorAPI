@@ -16,7 +16,7 @@ import cz.inovatika.altoEditor.domain.enums.DigitalObjectState;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
-import cz.inovatika.altoEditor.domain.repository.spec.DigitalObjectSpecifications;
+import cz.inovatika.altoEditor.domain.repository.spec.DigitalObjectSpecification;
 import cz.inovatika.altoEditor.domain.service.container.DigitalObjectUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.DigitalObjectWithContent;
 import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
@@ -31,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class DigitalObjectService {
 
     private final DigitalObjectRepository repository;
@@ -58,31 +57,39 @@ public class DigitalObjectService {
             Pageable pageable) {
 
         List<Specification<DigitalObject>> userSpecs = users != null ? users.stream()
-                .map(DigitalObjectSpecifications::hasUser)
+                .map(DigitalObjectSpecification::hasUser)
                 .collect(Collectors.toList())
                 : List.of();
 
         Specification<DigitalObject> spec = Specification.allOf(
                 Specification.anyOf(userSpecs),
-                DigitalObjectSpecifications.hasInstance(instanceId),
-                DigitalObjectSpecifications.hasPid(targetPid),
-                DigitalObjectSpecifications.hasLabelLike(label),
-                DigitalObjectSpecifications.hasTitleLike(title),
-                DigitalObjectSpecifications.createdAfter(createdAfter),
-                DigitalObjectSpecifications.createdBefore(createdBefore),
-                DigitalObjectSpecifications.hasStateIn(states));
+                DigitalObjectSpecification.hasInstance(instanceId),
+                DigitalObjectSpecification.hasPid(targetPid),
+                DigitalObjectSpecification.hasLabelLike(label),
+                DigitalObjectSpecification.hasTitleLike(title),
+                DigitalObjectSpecification.createdAfter(createdAfter),
+                DigitalObjectSpecification.createdBefore(createdBefore),
+                DigitalObjectSpecification.hasStateIn(states));
 
         return repository.findAll(spec, pageable);
     }
 
+    /**
+     * The ALTO content is retrieved in the following order:
+     * 1. The version owned by the current user.
+     * 2. The version currently in 'ACTIVE' state.
+     * */
+    public Optional<DigitalObject> findRelated(String pid, Integer userId) {
+        return repository.findRelated(pid, userId).stream().findFirst();
+    }
+
+    /**
+     * The ALTO content is retrieved in the following order:
+     * 1. The version owned by the current user.
+     * 2. The version currently in 'ACTIVE' state.
+     * */
     public DigitalObjectWithContent findRelatedAlto(String pid, Integer userId) {
-        // The ALTO content is retrieved in the following order:
-        // 1. The version owned by the current user.
-        // 2. The version currently in 'ACTIVE' state.
-        Optional<DigitalObject> digitalObject = repository
-                .findRelated(pid, userId)
-                .stream()
-                .findFirst();
+        Optional<DigitalObject> digitalObject = this.findRelated(pid, userId);
 
         if (digitalObject.isPresent()) {
             DigitalObject obj = digitalObject.get();
@@ -208,7 +215,6 @@ public class DigitalObjectService {
 
         DigitalObject updatedDigitalObject = objOpt.get();
         updatedDigitalObject.setState(DigitalObjectState.PENDING);
-        updatedDigitalObject.setDate(LocalDateTime.now());
         repository.save(updatedDigitalObject);
 
         return new DigitalObjectWithContent(updatedDigitalObject, altoContent.getBytes());

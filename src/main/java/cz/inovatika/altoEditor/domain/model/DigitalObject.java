@@ -1,6 +1,10 @@
 package cz.inovatika.altoEditor.domain.model;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 
 import cz.inovatika.altoEditor.domain.enums.DigitalObjectState;
 import jakarta.persistence.Column;
@@ -10,10 +14,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Index;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,14 +26,13 @@ import lombok.NoArgsConstructor;
  * DigitalObject entity with JPA annotations.
  */
 @Entity
-@Table(
-    name = "digital_objects",
-    uniqueConstraints = @UniqueConstraint(
-        columnNames = {"instance_id", "pid", "version"}
-    )
-)
+@Table(name = "digital_objects", uniqueConstraints = @UniqueConstraint(columnNames = { "instance_id", "pid",
+        "version" }), indexes = {
+                @Index(columnList = "pid"),
+                @Index(columnList = "user_id")
+        })
 @Data
-@Builder
+@Builder(builderClassName = "DigitalObjectBuilder", toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class DigitalObject {
@@ -40,10 +41,15 @@ public class DigitalObject {
      * Primary key identifier.
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "digital_objects_id_seq")
-    @SequenceGenerator(name = "digital_objects_id_seq", sequenceName = "digital_objects_id_seq", allocationSize = 1)
-    @Column(name = "id")
-    private Integer id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    /**
+     * Target UUID of the digital object in Kramerius.
+     */
+    @ManyToOne
+    @JoinColumn(name = "uuid", referencedColumnName = "uuid", nullable = false)
+    private ObjectHierarchyNode hierarchyNode;
 
     /**
      * * Owner user of this digital object.
@@ -59,25 +65,16 @@ public class DigitalObject {
     private String instanceId;
 
     /**
-     * Target PID of the digital object in Kramerius.
-     */
-    @Column(name = "pid")
-    private String pid;
-
-    /**
      * Title of this digital object - page, so the page title / number.
-     */
-    @Column(name = "label")
-    private String label;
-
-    /**
-     * Title identifying the context of this digital object.
-     * In many cases, this is the title of the parent document.
-     * But in deeper hierarchies, like periodicals, it should contain
-     * the title of periodical, volume and issue.
      */
     @Column(name = "title")
     private String title;
+
+    /**
+     * Title identifying the context of this digital object.
+     */
+    @Column(name = "context_title")
+    private String contextTitle;
 
     /**
      * Version number of this digital object.
@@ -86,10 +83,18 @@ public class DigitalObject {
     private Integer version;
 
     /**
-     * Date of the last change of this digital object.
+     * Timestamp of creation of this digital object.
      */
-    @Column(name = "date")
-    private LocalDateTime date;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    /**
+     * Timestamp of last update of this digital object.
+     */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
     /**
      * State of this digital object.
@@ -97,13 +102,22 @@ public class DigitalObject {
     @Column(name = "state")
     private DigitalObjectState state;
 
-    @PrePersist
-    void created() {
-        this.date = LocalDateTime.now();
+    public static class DigitalObjectBuilder {
+        public DigitalObjectBuilder pid(String pid) {
+            if (pid.startsWith("uuid:")) {
+                this.hierarchyNode = ObjectHierarchyNode.builder()
+                        .uuid(UUID.fromString(pid.substring(5)))
+                        .build();
+            } else {
+                this.hierarchyNode = ObjectHierarchyNode.builder()
+                        .uuid(UUID.fromString(pid))
+                        .build();
+            }
+            return this;
+        }
     }
 
-    @PreUpdate
-    void updated() {
-        this.date = LocalDateTime.now();
+    public String getPid() {
+        return "uuid:" + this.hierarchyNode.getUuid().toString();
     }
 }

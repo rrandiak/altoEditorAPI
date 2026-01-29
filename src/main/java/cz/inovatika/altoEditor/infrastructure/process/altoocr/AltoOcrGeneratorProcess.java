@@ -44,7 +44,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             UserProfile userProfile,
             ProcessorsProperties.ProcessorConfig generatorConfig) {
 
-        super(batch.getId(), batch.getPriority(), batch.getCreateDate());
+        super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
 
         this.workDirectoryService = workDirectoryService;
         this.batchService = batchService;

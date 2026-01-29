@@ -6,7 +6,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 
-public class DigitalObjectSpecifications {
+public class DigitalObjectSpecification {
 
     public static Specification<DigitalObject> hasUser(Integer userId) {
         return (root, query, cb) -> userId == null ? null : cb.equal(root.get("user_id"), userId);

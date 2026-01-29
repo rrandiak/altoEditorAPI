@@ -118,7 +118,6 @@ public class DigitalObjectController {
         return ResponseEntity.ok(altoContent);
     }
 
-
     /**
      * Get the ALTO content of active version of a digital object.
      * 
@@ -202,7 +201,7 @@ public class DigitalObjectController {
      * @return The created batch process information.
      */
     @PostMapping("/{pid}/generate")
-    @PreAuthorize("hasAuthority('CURATOR')")
+    @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> generateAlto(
             @PathVariable String pid,
             @RequestParam(required = false) BatchPriority priority) {

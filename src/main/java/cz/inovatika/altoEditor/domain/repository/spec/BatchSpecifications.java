@@ -26,19 +26,19 @@ public class BatchSpecifications {
     }
 
     public static Specification<Batch> createdAfter(LocalDateTime date) {
-        return (root, query, cb) -> date == null ? null : cb.greaterThanOrEqualTo(root.get("create_date"), date);
+        return (root, query, cb) -> date == null ? null : cb.greaterThanOrEqualTo(root.get("created_at"), date);
     }
 
     public static Specification<Batch> createdBefore(LocalDateTime date) {
-        return (root, query, cb) -> date == null ? null : cb.lessThanOrEqualTo(root.get("create_date"), date);
+        return (root, query, cb) -> date == null ? null : cb.lessThanOrEqualTo(root.get("created_at"), date);
     }
 
     public static Specification<Batch> updatedAfter(LocalDateTime date) {
-        return (root, query, cb) -> date == null ? null : cb.greaterThanOrEqualTo(root.get("update_date"), date);
+        return (root, query, cb) -> date == null ? null : cb.greaterThanOrEqualTo(root.get("updated_at"), date);
     }
 
     public static Specification<Batch> updatedBefore(LocalDateTime date) {
-        return (root, query, cb) -> date == null ? null : cb.lessThanOrEqualTo(root.get("update_date"), date);
+        return (root, query, cb) -> date == null ? null : cb.lessThanOrEqualTo(root.get("updated_at"), date);
     }
 
     public static Specification<Batch> hasPriority(BatchPriority priority) {

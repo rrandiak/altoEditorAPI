@@ -2,6 +2,9 @@ package cz.inovatika.altoEditor.domain.model;
 
 import java.time.LocalDateTime;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
@@ -11,8 +14,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -47,6 +48,12 @@ public class Batch {
     private Integer id;
 
     /**
+     * Type of this batch.
+     */
+    @Column(name = "type", nullable = false)
+    private BatchType type;
+
+    /**
      * PID of the target object for this batch.
      */
     @Column(name = "pid")
@@ -63,12 +70,6 @@ public class Batch {
      */
     @Column(name = "object_id")
     private Integer objectId;
-
-    /**
-     * Type of this batch.
-     */
-    @Column(name = "type")
-    private BatchType type;
 
     /**
      * Current state of this batch.
@@ -93,14 +94,16 @@ public class Batch {
     /**
      * Date of creation of this batch.
      */
-    @Column(name = "create_date")
-    private LocalDateTime createDate;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
     /**
      * Date of last update of this batch.
      */
-    @Column(name = "update_date")
-    private LocalDateTime updateDate;
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
     /**
      * Estimated number of items in this batch.
@@ -113,16 +116,4 @@ public class Batch {
      */
     @Column(name = "log", columnDefinition = "TEXT")
     private String log;
-
-    @PrePersist
-    void created() {
-        LocalDateTime now = LocalDateTime.now();
-        this.createDate = now;
-        this.updateDate = now;
-    }
-
-    @PreUpdate
-    void updated() {
-        this.updateDate = LocalDateTime.now();
-    }
 }

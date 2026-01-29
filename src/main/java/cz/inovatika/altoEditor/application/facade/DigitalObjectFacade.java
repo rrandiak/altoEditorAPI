@@ -14,6 +14,7 @@ import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.service.DigitalObjectService;
 import cz.inovatika.altoEditor.domain.service.container.DigitalObjectUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.DigitalObjectWithContent;
+import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
 import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
@@ -124,6 +125,11 @@ public class DigitalObjectFacade {
     }
 
     public BatchDto generateAlto(String pid, BatchPriority priority) {
+        if (service.findRelated(pid, userContext.getUserId()) == null) {
+            throw new DigitalObjectNotFoundException(
+                    "No digital object found for PID: " + pid + " and current user");
+        }
+
         Batch batch = batchRepository.save(Batch.builder()
                 .pid(pid)
                 .priority(priority)

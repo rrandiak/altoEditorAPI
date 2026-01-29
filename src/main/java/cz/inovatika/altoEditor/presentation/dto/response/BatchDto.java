@@ -21,8 +21,8 @@ public class BatchDto {
     private Integer id;
     private String pid;
     private String instance;
-    private LocalDateTime createDate;
-    private LocalDateTime updateDate;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private BatchState state;
     private BatchSubstate substate;
     private BatchPriority priority;

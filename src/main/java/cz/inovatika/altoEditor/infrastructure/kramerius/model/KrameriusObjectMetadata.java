@@ -10,7 +10,11 @@ import lombok.Data;
 public class KrameriusObjectMetadata {
 
     private final String pid;
+    private final String model;
     private final String title;
-    private final String parentPath;
+    private final Integer indexInParent;
+    private final String parentPid;
+    private final String parentModel;
     private final String parentTitle;
+    private final String rootTitle;
 }

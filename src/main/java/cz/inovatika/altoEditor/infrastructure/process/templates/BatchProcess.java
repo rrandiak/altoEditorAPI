@@ -12,7 +12,7 @@ public abstract class BatchProcess implements Runnable, Comparable<BatchProcess>
 
     protected final Integer batchId;
     protected final BatchPriority priority;
-    protected final LocalDateTime createdDate;
+    protected final LocalDateTime createdAt;
 
     @Override
     public final int compareTo(BatchProcess other) {
@@ -29,7 +29,7 @@ public abstract class BatchProcess implements Runnable, Comparable<BatchProcess>
         }
 
         // older batch first
-        return this.getCreatedDate().compareTo(other.getCreatedDate());
+        return this.getCreatedAt().compareTo(other.getCreatedAt());
     }
 
     private static int priorityValue(BatchPriority p) {

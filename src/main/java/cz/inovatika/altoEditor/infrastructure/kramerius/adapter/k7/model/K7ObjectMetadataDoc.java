@@ -12,15 +12,27 @@ public class K7ObjectMetadataDoc {
 
     @JsonProperty("pid")
     private String pid;
+
+    @JsonProperty("model")
+    private String model;
     
     @JsonProperty("title.search")
-    private String titleSearch;
+    private String title;
+
+    @JsonProperty("rels_ext_index.sort")
+    private Integer indexInParent;
     
-    @JsonProperty("own_pid_path")
-    private String ownPidPath;
+    @JsonProperty("own_parent.pid")
+    private String parentPid;
+
+    @JsonProperty("own_parent.model")
+    private String parentModel;
     
     @JsonProperty("own_parent.title")
-    private String ownParentTitle;
+    private String parentTitle;
+
+    @JsonProperty("root.title")
+    private String rootTitle;
 
     public KrameriusObjectMetadata toMetadata() {
         return KrameriusObjectMetadata.builder()

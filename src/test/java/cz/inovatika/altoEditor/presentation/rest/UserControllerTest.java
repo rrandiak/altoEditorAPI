@@ -19,8 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import cz.inovatika.altoEditor.application.facade.UserFacade;
 import cz.inovatika.altoEditor.presentation.dto.response.UserDto;
+import cz.inovatika.altoEditor.presentation.facade.UserFacade;
 
 @WebMvcTest(UserController.class)
 class UserControllerTest extends ControllerTest {

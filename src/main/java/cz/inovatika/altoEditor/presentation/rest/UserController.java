@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import cz.inovatika.altoEditor.application.facade.UserFacade;
 import cz.inovatika.altoEditor.presentation.dto.response.UserDto;
+import cz.inovatika.altoEditor.presentation.facade.UserFacade;
 import lombok.RequiredArgsConstructor;
 
 @RestController

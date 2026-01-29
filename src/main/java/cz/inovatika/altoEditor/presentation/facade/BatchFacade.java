@@ -1,4 +1,4 @@
-package cz.inovatika.altoEditor.application.facade;
+package cz.inovatika.altoEditor.presentation.facade;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

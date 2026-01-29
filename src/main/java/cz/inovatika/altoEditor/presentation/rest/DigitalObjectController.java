@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import cz.inovatika.altoEditor.application.facade.DigitalObjectFacade;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.DigitalObjectDto;
+import cz.inovatika.altoEditor.presentation.facade.DigitalObjectFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.DigitalObjectSearchRequest;
 import lombok.RequiredArgsConstructor;
 

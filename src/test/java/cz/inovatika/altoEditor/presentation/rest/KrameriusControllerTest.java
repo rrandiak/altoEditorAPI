@@ -15,8 +15,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import cz.inovatika.altoEditor.application.facade.KrameriusFacade;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
+import cz.inovatika.altoEditor.presentation.facade.KrameriusFacade;
 
 @WebMvcTest(KrameriusController.class)
 class KrameriusControllerTest extends ControllerTest {

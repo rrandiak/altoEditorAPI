@@ -22,8 +22,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import cz.inovatika.altoEditor.application.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
+import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 
 @WebMvcTest(BatchController.class)

@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import cz.inovatika.altoEditor.application.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
+import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import lombok.RequiredArgsConstructor;
 

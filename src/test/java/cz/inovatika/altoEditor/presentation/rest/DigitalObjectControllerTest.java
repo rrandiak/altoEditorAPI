@@ -12,7 +12,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import cz.inovatika.altoEditor.application.facade.DigitalObjectFacade;
+import cz.inovatika.altoEditor.presentation.facade.DigitalObjectFacade;
 
 @WebMvcTest(DigitalObjectController.class)
 public class DigitalObjectControllerTest extends ControllerTest {

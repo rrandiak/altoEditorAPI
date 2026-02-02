@@ -5,31 +5,32 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import cz.inovatika.altoEditor.presentation.facade.DigitalObjectFacade;
+import cz.inovatika.altoEditor.presentation.facade.AltoVersionFacade;
 
-@WebMvcTest(DigitalObjectController.class)
-public class DigitalObjectControllerTest extends ControllerTest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class AltoVersionControllerTest extends ControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-
     @MockitoBean
-    private DigitalObjectFacade facade;
+    private AltoVersionFacade facade;
 
     private final int TEST_OBJECT_ID = 1;
 
     @Test
     @WithMockUser(authorities = { "CURATOR" })
     void setObjectActive_shouldReturnOk_whenUserIsCurator() throws Exception {
-        mockMvc.perform(post("/api/objects/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isOk());
@@ -38,7 +39,7 @@ public class DigitalObjectControllerTest extends ControllerTest {
     @Test
     @WithMockUser(authorities = { "EDITOR" })
     void setObjectActive_shouldReturnForbidden_whenUserIsEditor() throws Exception {
-        mockMvc.perform(post("/api/objects/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isForbidden());
@@ -47,7 +48,7 @@ public class DigitalObjectControllerTest extends ControllerTest {
     @Test
     @WithMockUser(authorities = { "USER" })
     void setObjectActive_shouldReturnForbidden_whenUserHasNoProperAuthority() throws Exception {
-        mockMvc.perform(post("/api/objects/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isForbidden());
@@ -55,9 +56,9 @@ public class DigitalObjectControllerTest extends ControllerTest {
 
     @Test
     void setObjectActive_shouldReturnUnauthorized_whenNoUser() throws Exception {
-        mockMvc.perform(post("/api/objects/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
     }
 }

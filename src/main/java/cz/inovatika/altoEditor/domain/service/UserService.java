@@ -41,6 +41,18 @@ public class UserService {
     }
 
     /**
+     * Get user by id.
+     * @param id
+     * 
+     * @return User entity
+     * @throws IllegalArgumentException if user does not exist
+     */
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + id));
+    }
+
+    /**
      * Get user by username.
      * 
      * @param username

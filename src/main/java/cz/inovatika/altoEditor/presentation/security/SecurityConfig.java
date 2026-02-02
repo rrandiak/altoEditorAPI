@@ -22,9 +22,6 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
-                // .authorizeHttpRequests(auth -> auth
-                //         .requestMatchers("/api/users/me").authenticated()
-                //         .anyRequest().authenticated())
                 .authorizeHttpRequests(auth -> auth
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

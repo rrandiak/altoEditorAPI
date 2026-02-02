@@ -12,7 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -26,7 +27,8 @@ import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 
-@WebMvcTest(BatchController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
 class BatchControllerTest extends ControllerTest {
 
     @Autowired
@@ -86,6 +88,6 @@ class BatchControllerTest extends ControllerTest {
     void getBatches_shouldReturnUnauthorized_whenNoUser() throws Exception {
         mockMvc.perform(get("/api/batches")
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
     }
 }

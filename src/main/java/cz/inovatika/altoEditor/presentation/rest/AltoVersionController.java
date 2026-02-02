@@ -1,7 +1,5 @@
 package cz.inovatika.altoEditor.presentation.rest;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,17 +13,38 @@ import org.springframework.web.bind.annotation.RestController;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
-import cz.inovatika.altoEditor.presentation.dto.response.DigitalObjectDto;
-import cz.inovatika.altoEditor.presentation.facade.DigitalObjectFacade;
-import cz.inovatika.altoEditor.presentation.dto.request.DigitalObjectSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
+import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
+import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
+import cz.inovatika.altoEditor.presentation.facade.AltoVersionFacade;
+import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
+import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/objects")
+@RequestMapping("/api/alto-versions")
 @RequiredArgsConstructor
-public class DigitalObjectController {
+public class AltoVersionController {
 
-    private final DigitalObjectFacade facade;
+    private final AltoVersionFacade facade;
+
+    /**
+     * Search all digital objects with optional filters and pagination.
+     * 
+     * @param request Search criteria for digital objects.
+     * @param pageable Pagination information.
+     * 
+     * @return A paginated list of digital objects matching the search criteria.
+     */
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('CURATOR')")
+    public ResponseEntity<SearchResultsDto<AltoVersionSearchDto>> getAltoVersions(
+            @ModelAttribute AltoVersionSearchRequest request) {
+
+        SearchResultsDto<AltoVersionSearchDto> page = facade.searchAll(request);
+
+        return ResponseEntity.ok(page);
+    }
 
     /**
      * Search digital objects related to the current user with optional filters and pagination.
@@ -40,32 +59,12 @@ public class DigitalObjectController {
      * 
      * @return A paginated list of digital objects matching the search criteria.
      */
-    @GetMapping("/search-related")
+    @GetMapping("/search/related")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<Page<DigitalObjectDto>> getUserDigitalObjects(
-            @ModelAttribute DigitalObjectSearchRequest request,
-            Pageable pageable) {
+    public ResponseEntity<SearchResultsDto<AltoVersionSearchDto>> getUserAltoVersions(
+            @ModelAttribute AltoVersionSearchRelatedRequest request) {
 
-        Page<DigitalObjectDto> page = facade.searchRelated(request, pageable);
-
-        return ResponseEntity.ok(page);
-    }
-
-    /**
-     * Search all digital objects with optional filters and pagination.
-     * 
-     * @param request Search criteria for digital objects.
-     * @param pageable Pagination information.
-     * 
-     * @return A paginated list of digital objects matching the search criteria.
-     */
-    @GetMapping("/search-all")
-    @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<Page<DigitalObjectDto>> getDigitalObjects(
-            @ModelAttribute DigitalObjectSearchRequest request,
-            Pageable pageable) {
-
-        Page<DigitalObjectDto> page = facade.searchAll(request, pageable);
+        SearchResultsDto<AltoVersionSearchDto> page = facade.searchRelated(request);
 
         return ResponseEntity.ok(page);
     }
@@ -88,32 +87,13 @@ public class DigitalObjectController {
      * 
      * @return The ALTO content of the digital object.
      */
-    @GetMapping("/{pid}/related-alto")
+    @GetMapping("/{pid}/related")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<DigitalObjectDto> getRelatedAlto(
+    public ResponseEntity<AltoVersionDto> getRelatedAlto(
             @PathVariable String pid,
             @RequestParam(required = false) String instanceId) {
 
-        DigitalObjectDto altoContent = facade.getRelatedAlto(pid, instanceId);
-
-        return ResponseEntity.ok(altoContent);
-    }
-
-    /**
-     * Get ALTO content of a specific version of a digital object.
-     * 
-     * @param pid The identifier of the digital object.
-     * @param version The version number of the ALTO content to retrieve.
-     * 
-     * @return The ALTO content of the specified version of the digital object.
-     */
-    @GetMapping("/{pid}/alto-version/{version}")
-    @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<DigitalObjectDto> getAltoVersion(
-            @PathVariable String pid,
-            @PathVariable Integer version) {
-
-        DigitalObjectDto altoContent = facade.getAltoVersion(pid, version);
+        AltoVersionDto altoContent = facade.getRelatedAlto(pid, instanceId);
 
         return ResponseEntity.ok(altoContent);
     }
@@ -125,34 +105,33 @@ public class DigitalObjectController {
      * 
      * @return The ALTO content of the active version of the digital object.
      */
-    @GetMapping("/{pid}/active-alto")
+    @GetMapping("/{pid}/active")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<DigitalObjectDto> getActiveAlto(
+    public ResponseEntity<AltoVersionDto> getActiveAlto(
             @PathVariable String pid) {
 
-        DigitalObjectDto altoOriginalContent = facade.getActiveAlto(pid);
+        AltoVersionDto altoOriginalContent = facade.getActiveAlto(pid);
 
         return ResponseEntity.ok(altoOriginalContent);
     }
 
     /**
-     * Create a new version or replace pending version of ALTO content
-     * for a digital object and current user.
+     * Get ALTO content of a specific version of a digital object.
      * 
      * @param pid The identifier of the digital object.
-     * @param altoContent The new ALTO content to be saved.
+     * @param version The version number of the ALTO content to retrieve.
      * 
-     * @return The updated digital object with the new ALTO version.
+     * @return The ALTO content of the specified version of the digital object.
      */
-    @PostMapping("/{pid}/alto")
-    @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<DigitalObjectDto> newAltoVersion(
+    @GetMapping("/{pid}/versions/{version}")
+    @PreAuthorize("hasAuthority('CURATOR')")
+    public ResponseEntity<AltoVersionDto> getAltoVersion(
             @PathVariable String pid,
-            @RequestBody String altoContent) {
+            @PathVariable Integer version) {
 
-        DigitalObjectDto result = facade.createNewAltoVersion(pid, altoContent);
+        AltoVersionDto altoContent = facade.getAltoVersion(pid, version);
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(altoContent);
     }
 
     /**
@@ -164,7 +143,7 @@ public class DigitalObjectController {
      */
     @GetMapping("/{objectId}/ocr")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<String> getDigitalObjectOcr(
+    public ResponseEntity<String> getAltoVersionOcr(
             @PathVariable Integer objectId) {
 
         String ocrContent = facade.getOcr(objectId);
@@ -192,6 +171,26 @@ public class DigitalObjectController {
     }
 
     /**
+     * Create a new version or replace pending version of ALTO content
+     * for a digital object and current user.
+     * 
+     * @param pid The identifier of the digital object.
+     * @param altoContent The new ALTO content to be saved.
+     * 
+     * @return The updated digital object with the new ALTO version.
+     */
+    @PostMapping("/{pid}/versions")
+    @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
+    public ResponseEntity<AltoVersionDto> newAltoVersion(
+            @PathVariable String pid,
+            @RequestBody String altoContent) {
+
+        AltoVersionDto result = facade.createNewAltoVersion(pid, altoContent);
+
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * Generate ALTO for a digital object by creating a batch process.
      * The PID can target either a single specific digital object or a document hierarchy.
      * 
@@ -200,13 +199,14 @@ public class DigitalObjectController {
      * 
      * @return The created batch process information.
      */
-    @PostMapping("/{pid}/generate")
+    @PostMapping("/{pid}/generate/{engine}")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> generateAlto(
             @PathVariable String pid,
+            @PathVariable String engine,
             @RequestParam(required = false) BatchPriority priority) {
 
-        BatchDto result = facade.generateAlto(pid, priority);
+        BatchDto result = facade.generateAlto(pid, engine, priority);
 
         return ResponseEntity.ok(result);
     }

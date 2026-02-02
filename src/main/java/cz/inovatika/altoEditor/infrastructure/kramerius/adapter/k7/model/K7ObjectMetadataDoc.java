@@ -19,27 +19,23 @@ public class K7ObjectMetadataDoc {
     @JsonProperty("title.search")
     private String title;
 
+    @JsonProperty("level")
+    private Integer level;
+
     @JsonProperty("rels_ext_index.sort")
     private Integer indexInParent;
     
     @JsonProperty("own_parent.pid")
     private String parentPid;
 
-    @JsonProperty("own_parent.model")
-    private String parentModel;
-    
-    @JsonProperty("own_parent.title")
-    private String parentTitle;
-
-    @JsonProperty("root.title")
-    private String rootTitle;
-
     public KrameriusObjectMetadata toMetadata() {
         return KrameriusObjectMetadata.builder()
                 .pid(pid)
-                .title(titleSearch)
-                .parentPath(ownPidPath)
-                .parentTitle(ownParentTitle)
+                .title(title)
+                .model(model)
+                .level(level)
+                .indexInParent(indexInParent)
+                .parentPid(parentPid)
                 .build();
     }
 }

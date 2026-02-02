@@ -1,123 +1,105 @@
 package cz.inovatika.altoEditor.domain.model;
 
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-
-import cz.inovatika.altoEditor.domain.enums.DigitalObjectState;
+import cz.inovatika.altoEditor.domain.enums.Model;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Table;
-import jakarta.persistence.Index;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DigitalObject entity with JPA annotations.
- */
 @Entity
-@Table(name = "digital_objects", uniqueConstraints = @UniqueConstraint(columnNames = { "instance_id", "pid",
-        "version" }), indexes = {
-                @Index(columnList = "pid"),
-                @Index(columnList = "user_id")
-        })
+@Table(name = "object_hierarchy", indexes = {
+        @Index(columnList = "uuid"),
+        @Index(columnList = "parent_uuid")
+})
 @Data
 @Builder(builderClassName = "DigitalObjectBuilder", toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class DigitalObject {
-
-    /**
-     * Primary key identifier.
-     */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "uuid")
+    private UUID uuid;
 
-    /**
-     * Target UUID of the digital object in Kramerius.
-     */
-    @ManyToOne
-    @JoinColumn(name = "uuid", referencedColumnName = "uuid", nullable = false)
-    private ObjectHierarchyNode hierarchyNode;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "parent_uuid", 
+        foreignKey = @ForeignKey(name = "fk_parent_uuid")
+    )
+    private DigitalObject parent;
+    
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
+    @Builder.Default
+    private List<DigitalObject> children = new ArrayList<>();
 
-    /**
-     * * Owner user of this digital object.
-     */
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "model", length = 31)
+    private String model;
 
-    /**
-     * Kramerius instance ID.
-     */
-    @Column(name = "instance_id")
-    private String instanceId;
-
-    /**
-     * Title of this digital object - page, so the page title / number.
-     */
-    @Column(name = "title")
+    @Column(length = 255)
     private String title;
 
-    /**
-     * Title identifying the context of this digital object.
-     */
-    @Column(name = "context_title")
-    private String contextTitle;
+    @Column(columnDefinition = "smallint")
+    private Integer level;
 
-    /**
-     * Version number of this digital object.
-     */
-    @Column(name = "version", nullable = false)
-    private Integer version;
+    @Column(columnDefinition = "smallint")
+    private Integer indexInParent;
 
-    /**
-     * Timestamp of creation of this digital object.
-     */
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    /**
-     * Timestamp of last update of this digital object.
-     */
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    /**
-     * State of this digital object.
-     */
-    @Column(name = "state")
-    private DigitalObjectState state;
+    @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "alto_version_id")
+    private List<AltoVersion> altoVersions;
 
     public static class DigitalObjectBuilder {
         public DigitalObjectBuilder pid(String pid) {
-            if (pid.startsWith("uuid:")) {
-                this.hierarchyNode = ObjectHierarchyNode.builder()
-                        .uuid(UUID.fromString(pid.substring(5)))
-                        .build();
+            if (!pid.startsWith("uuid:")) {
+                throw new IllegalArgumentException("PID must start with 'uuid:'");
+            }
+
+            this.uuid = UUID.fromString(pid.substring(5));
+
+            return this;
+        }
+
+        public DigitalObjectBuilder title(String title) {
+            if (title != null && title.length() > 255) {
+                this.title = title.substring(0, 252) + "...";
             } else {
-                this.hierarchyNode = ObjectHierarchyNode.builder()
-                        .uuid(UUID.fromString(pid))
-                        .build();
+                this.title = title;
             }
             return this;
         }
     }
 
     public String getPid() {
-        return "uuid:" + this.hierarchyNode.getUuid().toString();
+        return "uuid:" + this.getUuid().toString();
+    }
+
+    public DigitalObject getRoot() {
+        DigitalObject current = this;
+        while (current.getParent() != null) {
+            current = current.getParent();
+        }
+        return current;
+    }
+
+    public boolean isPage() {
+        return this.model.equals(Model.PAGE.toString());
+    }
+
+    public boolean hasAltoVersions() {
+        return this.altoVersions != null && !this.altoVersions.isEmpty();
     }
 }

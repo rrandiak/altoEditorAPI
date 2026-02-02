@@ -28,6 +28,10 @@ public class KrameriusProperties {
         private String url;
         private String type;
         private String adminUrl;
+        @NotNull
+        private Integer connectTimeout = 10000;
+        @NotNull
+        private Integer readTimeout = 30000;
 
         public String trimmedUrl() {
             return url != null ? url.replaceAll("/+$", "") : null;

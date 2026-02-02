@@ -94,8 +94,8 @@ public class BatchControllerIT {
         batch1.setObjectId(100);
         batch1.setEstimatedItemCount(10);
         batch1.setLog("Test log 1");
-        batch1.setCreateDate(LocalDateTime.now().minusDays(1));
-        batch1.setUpdateDate(LocalDateTime.now());
+        batch1.setCreatedAt(LocalDateTime.now().minusDays(1));
+        batch1.setUpdatedAt(LocalDateTime.now());
 
         Batch batch2 = new Batch();
         batch2.setPid("PID-002");
@@ -107,8 +107,8 @@ public class BatchControllerIT {
         batch2.setObjectId(200);
         batch2.setEstimatedItemCount(20);
         batch2.setLog("Test log 2");
-        batch2.setCreateDate(LocalDateTime.now().minusDays(2));
-        batch2.setUpdateDate(LocalDateTime.now());
+        batch2.setCreatedAt(LocalDateTime.now().minusDays(2));
+        batch2.setUpdatedAt(LocalDateTime.now());
 
         batchRepository.save(batch1);
         batchRepository.save(batch2);

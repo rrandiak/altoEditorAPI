@@ -19,15 +19,20 @@ import cz.inovatika.altoEditor.domain.enums.BatchType;
 public class BatchDto {
 
     private Integer id;
+
+    private BatchType type;
+    private BatchPriority priority;
+
     private String pid;
+    private Integer objectId;
     private String instance;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+
     private BatchState state;
     private BatchSubstate substate;
-    private BatchPriority priority;
-    private BatchType type;
-    private Integer objectId;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     private Integer estimatedItemCount;
+
     private String log;
 }

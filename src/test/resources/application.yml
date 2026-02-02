@@ -13,6 +13,10 @@ application:
     test:
       title: "Kramerius Test Instance"
       url: "http://localhost:8080/"
+  engines:
+    pero:
+      exec: "python"
+      entry: "/usr/local/bin/pero.py"
 
 spring:
   jpa:

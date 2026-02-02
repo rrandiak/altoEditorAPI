@@ -8,7 +8,7 @@ import cz.inovatika.altoEditor.config.properties.AuthProperties;
 import cz.inovatika.altoEditor.config.properties.JdbcProperties;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.config.properties.PermissionProperties;
-import cz.inovatika.altoEditor.config.properties.ProcessorsProperties;
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.config.properties.StoreProperties;
 
 @Configuration
@@ -18,7 +18,7 @@ import cz.inovatika.altoEditor.config.properties.StoreProperties;
     JdbcProperties.class,
     KrameriusProperties.class,
     PermissionProperties.class,
-    ProcessorsProperties.class,
+    EnginesProperties.class,
     StoreProperties.class
 })
 public class ApplicationConfig {

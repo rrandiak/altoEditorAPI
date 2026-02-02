@@ -2,7 +2,6 @@ package cz.inovatika.altoEditor.infrastructure.kramerius;
 
 import org.springframework.stereotype.Service;
 
-import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusHierarchyNode;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import lombok.RequiredArgsConstructor;
 
@@ -21,10 +20,6 @@ public class KrameriusService {
 
     public KrameriusObjectMetadata getObjectMetadata(String pid, String instanceId, String token) {
         return getClient(instanceId).getObjectMetadata(pid, token);
-    }
-
-    public KrameriusHierarchyNode getHierarchyNode(String pid, String instanceId, String token) {
-        return getClient(instanceId).getHierarchyNode(pid, token);
     }
 
     public byte[] getFoxmlBytes(String pid, String instanceId, String token) {

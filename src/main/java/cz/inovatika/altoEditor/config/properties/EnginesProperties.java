@@ -14,13 +14,13 @@ import lombok.Data;
 
 @Data
 @ConfigurationProperties(prefix = "application")
-public class ProcessorsProperties {
+public class EnginesProperties {
 
-    private Map<String, ProcessorConfig> processors = new HashMap<>();
+    private Map<String, EngineConfig> engines = new HashMap<>();
 
     @Data
     @Validated
-    public static class ProcessorConfig {
+    public static class EngineConfig {
         @NotBlank
         private String exec;
         @NotBlank
@@ -37,9 +37,5 @@ public class ProcessorsProperties {
 
         @NotNull
         private Long timeout = 180_000L;
-    }
-
-    public ProcessorConfig getPeroProperties() {
-        return processors.get("pero");
     }
 }

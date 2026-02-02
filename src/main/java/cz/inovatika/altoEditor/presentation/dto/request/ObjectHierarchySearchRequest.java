@@ -9,6 +9,8 @@ public class ObjectHierarchySearchRequest {
     private String parentPid;
     private String model;
     private String title;
-    private Short level;
-    private Boolean hasAlto;
+    private Integer level;
+
+    private int offset = 0;
+    private int limit = 10;
 }

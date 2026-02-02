@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
-import cz.inovatika.altoEditor.config.properties.ProcessorsProperties;
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.config.properties.StoreProperties;
 import cz.inovatika.altoEditor.domain.enums.SpecialUser;
 import cz.inovatika.altoEditor.domain.model.User;
@@ -25,7 +25,7 @@ public class AppInitializer {
     private StoreProperties storeProperties;
 
     @Autowired
-    private ProcessorsProperties processorsProperties;
+    private EnginesProperties enginesProperties;
 
     @Autowired
     private BatchRepository batchRepository;
@@ -37,8 +37,8 @@ public class AppInitializer {
     public void init() {
         try {
             initStorage();
-            initAltoeditorUsers();
-            initProcessorUsers();
+            initSpecialUsers();
+            initEngineUsers();
             batchRepository.failAllRunningBatches("Application restarted.");
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
@@ -54,19 +54,22 @@ public class AppInitializer {
         LOGGER.info("Akubra storage initialized.");
     }
 
-    private void initAltoeditorUsers() {
-        if (userRepository.findSpecialUser(SpecialUser.ALTOEDITOR).isEmpty()) {
+    private void initSpecialUsers() {
+        if (userRepository.findSpecialUser(SpecialUser.KRAMERIUS).isEmpty()) {
             userRepository.save(User.builder()
-                    .username(SpecialUser.ALTOEDITOR.name())
+                    .uid(SpecialUser.KRAMERIUS.getUsername())
+                    .username(SpecialUser.KRAMERIUS.getUsername())
                     .build());
         }
     }
 
-    private void initProcessorUsers() {
-        processorsProperties.getProcessors().forEach((name, config) -> {
+    private void initEngineUsers() {
+        enginesProperties.getEngines().forEach((name, config) -> {
             if (userRepository.findByUsername(name).isEmpty()) {
                 userRepository.save(User.builder()
+                        .uid("engine-" + name)
                         .username(name)
+                        .isEngine(true)
                         .build());
             }
         });

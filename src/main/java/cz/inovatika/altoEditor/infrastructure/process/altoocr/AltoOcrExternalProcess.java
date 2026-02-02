@@ -4,14 +4,14 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import cz.inovatika.altoEditor.config.properties.ProcessorsProperties;
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.infrastructure.process.templates.ExternalProcess;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class AltoOcrExternalProcess extends ExternalProcess {
 
-    private final ProcessorsProperties.ProcessorConfig onfig;
+    private final EnginesProperties.EngineConfig onfig;
     private final File inImageFile;
     private final File outAltoFile;
     private final File outOcrFile;

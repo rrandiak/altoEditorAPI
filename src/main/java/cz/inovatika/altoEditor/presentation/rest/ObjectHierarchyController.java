@@ -1,7 +1,5 @@
 package cz.inovatika.altoEditor.presentation.rest;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,14 +11,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import cz.inovatika.altoEditor.presentation.dto.request.ObjectHierarchySearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
-import cz.inovatika.altoEditor.presentation.dto.response.ObjectHierarchyNodeDto;
+import cz.inovatika.altoEditor.presentation.dto.response.HierarchySearchDto;
+import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
 import cz.inovatika.altoEditor.presentation.facade.KrameriusFacade;
 import cz.inovatika.altoEditor.presentation.facade.ObjectHierarchyFacade;
 import lombok.RequiredArgsConstructor;
 @RestController
-@RequestMapping("/api/object-hierarchy")
+@RequestMapping("/api/hierarchy")
 @RequiredArgsConstructor
 public class ObjectHierarchyController {
 
@@ -28,29 +28,34 @@ public class ObjectHierarchyController {
 
     private final KrameriusFacade krameriusFacade;
     
+    /**
+     * Search object hierarchy nodes with optional filters and pagination.
+     */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<Page<ObjectHierarchyNodeDto>> search(
-            @ModelAttribute ObjectHierarchySearchRequest request,
-            Pageable pageable) {
+    public ResponseEntity<SearchResultsDto<HierarchySearchDto>> search(
+            @ModelAttribute ObjectHierarchySearchRequest request) {
 
-        Page<ObjectHierarchyNodeDto> page = facade.search(request, pageable);
+        SearchResultsDto<HierarchySearchDto> result = facade.search(request);
 
-        return ResponseEntity.ok(page);
+        return ResponseEntity.ok(result);
     }
 
+    /**
+     * Get object metadata from Kramerius by PID.
+     */
     @GetMapping("/{pid}/from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<ObjectHierarchyNodeDto> getByPid(
+    public ResponseEntity<KrameriusObjectMetadata> getByPid(
             @PathVariable String pid,
             @RequestParam(required = false) String instanceId) {
 
-        ObjectHierarchyNodeDto node = krameriusFacade.getHierarchyNode(pid, instanceId);
+        KrameriusObjectMetadata node = krameriusFacade.getObjectMetadata(pid, instanceId);
 
         return ResponseEntity.ok(node);
     }
 
-    @PostMapping("/{pid}/generate")
+    @PostMapping("/{pid}/generate-alto")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> generateAlto(
             @PathVariable String pid,
@@ -60,8 +65,8 @@ public class ObjectHierarchyController {
 
         return ResponseEntity.ok(batch);
     }
-
-    @PostMapping("/{pid}/fetch")
+    
+    @PostMapping("/{pid}/fetch-from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> fetchFromKramerius(
             @PathVariable String pid,

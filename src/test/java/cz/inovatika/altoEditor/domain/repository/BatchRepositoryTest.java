@@ -43,7 +43,7 @@ class BatchRepositoryTest {
     }
 
     @Test
-    void whenSaveBatch_thenCreateDateAndUpdateDateAreSet() {
+    void whenSaveBatch_thenCreatedAtAndUpdatedAtAreSet() {
         // Given
         Batch batch = createBatch("uuid:12345", BatchState.PLANNED, "dk");
 
@@ -53,18 +53,18 @@ class BatchRepositoryTest {
 
         // Then
         assertThat(saved.getId()).isNotNull();
-        assertThat(saved.getCreateDate()).isNotNull();
-        assertThat(saved.getUpdateDate()).isNotNull();
-        assertThat(saved.getCreateDate()).isEqualTo(saved.getUpdateDate());
+        assertThat(saved.getCreatedAt()).isNotNull();
+        assertThat(saved.getUpdatedAt()).isNotNull();
+        assertThat(saved.getCreatedAt()).isEqualTo(saved.getUpdatedAt());
     }
 
     @Test
-    void whenUpdateBatch_thenUpdateDateChanges() throws InterruptedException {
+    void whenUpdateBatch_thenUpdatedAtChanges() throws InterruptedException {
         // Given
         Batch batch = createBatch("uuid:12345", BatchState.PLANNED, "dk");
         Batch saved = batchRepository.save(batch);
         entityManager.flush();
-        LocalDateTime originalUpdateDate = saved.getUpdateDate();
+        LocalDateTime originalUpdatedAt = saved.getUpdatedAt();
 
         // Wait a bit to ensure time difference
         Thread.sleep(10);
@@ -76,8 +76,8 @@ class BatchRepositoryTest {
 
         // Then
         Batch updated = batchRepository.findById(saved.getId()).orElseThrow();
-        assertThat(updated.getUpdateDate()).isAfter(originalUpdateDate);
-        assertThat(updated.getCreateDate()).isEqualTo(saved.getCreateDate());
+        assertThat(updated.getUpdatedAt()).isAfter(originalUpdatedAt);
+        assertThat(updated.getCreatedAt()).isEqualTo(saved.getCreatedAt());
     }
 
     @Test

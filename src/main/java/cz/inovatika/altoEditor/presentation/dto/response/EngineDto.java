@@ -1,7 +1,5 @@
 package cz.inovatika.altoEditor.presentation.dto.response;
 
-import java.util.List;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,14 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DigitalObjectDto {
-
-    String pid;
-    List<DigitalObjectDto> children;
-    String model;
-    String title;
-    Integer level;
-    Integer relsExtIndex;
-
-    List<Integer> versions;
+public class EngineDto {
+    
+    private String name;
+    private Boolean enabled;
 }

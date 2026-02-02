@@ -1,36 +1,38 @@
 package cz.inovatika.altoEditor.presentation.facade;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import java.util.List;
-import java.util.ArrayList;
+import org.hibernate.search.engine.search.query.SearchResult;
 import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
+import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
-import cz.inovatika.altoEditor.domain.enums.DigitalObjectState;
+import cz.inovatika.altoEditor.domain.model.AltoVersion;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
-import cz.inovatika.altoEditor.domain.service.DigitalObjectService;
-import cz.inovatika.altoEditor.domain.service.container.DigitalObjectUploadContent;
-import cz.inovatika.altoEditor.domain.service.container.DigitalObjectWithContent;
-import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
+import cz.inovatika.altoEditor.domain.service.AltoVersionService;
+import cz.inovatika.altoEditor.domain.service.EngineService;
+import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
+import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
+import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
 import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
-import cz.inovatika.altoEditor.presentation.dto.request.DigitalObjectSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
+import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
+import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
-import cz.inovatika.altoEditor.presentation.dto.response.DigitalObjectDto;
+import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
+import cz.inovatika.altoEditor.presentation.mapper.AltoVersionMapper;
 import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
-import cz.inovatika.altoEditor.presentation.mapper.DigitalObjectMapper;
 import cz.inovatika.altoEditor.presentation.security.UserContextService;
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class DigitalObjectFacade {
+public class AltoVersionFacade {
 
-    private final DigitalObjectService service;
+    private final AltoVersionService service;
 
     private final KrameriusService krameriusService;
 
@@ -38,52 +40,58 @@ public class DigitalObjectFacade {
 
     private final UserContextService userContext;
 
-    private final DigitalObjectMapper mapper;
+    private final AltoVersionMapper mapper;
 
     private final BatchRepository batchRepository;
 
+    private final EngineService engineService;
+    
     private final ProcessDispatcher processDispatcher;
 
     private final AltoOcrGeneratorProcessFactory processFactory;
 
     private final BatchMapper batchMapper;
 
-    public Page<DigitalObjectDto> searchRelated(DigitalObjectSearchRequest request, Pageable pageable) {
-        Integer currentUserId = userContext.getUserId();
-        List<Integer> users = request.getUsers() != null ? new ArrayList<>(request.getUsers()) : new ArrayList<>();
-        if (!users.contains(currentUserId)) {
-            users.add(currentUserId);
-        }
-
-        return service.search(
-                users,
+    public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
+        SearchResult<AltoVersion> results = service.searchRelated(
+                userContext.getUserId(),
                 request.getInstanceId(),
                 request.getTargetPid(),
                 request.getHierarchyPid(),
-                request.getLabel(),
                 request.getTitle(),
                 request.getCreatedAfter(),
                 request.getCreatedBefore(),
                 request.getStates(),
-                pageable).map(mapper::toDto);
+                request.getOffset(),
+                request.getLimit());
+        
+        return SearchResultsDto.<AltoVersionSearchDto>builder()
+                .items(results.hits().stream().map(mapper::toSearchDto).toList())
+                .total(results.total().hitCount())
+                .build();
     }
 
-    public Page<DigitalObjectDto> searchAll(DigitalObjectSearchRequest request, Pageable pageable) {
-        return service.search(
+    public SearchResultsDto<AltoVersionSearchDto> searchAll(AltoVersionSearchRequest request) {
+        SearchResult<AltoVersion> results = service.search(
                 request.getUsers(),
                 request.getInstanceId(),
                 request.getTargetPid(),
                 request.getHierarchyPid(),
-                request.getLabel(),
                 request.getTitle(),
                 request.getCreatedAfter(),
                 request.getCreatedBefore(),
                 request.getStates(),
-                pageable).map(mapper::toDto);
+                request.getOffset(),
+                request.getLimit());
+        
+        return SearchResultsDto.<AltoVersionSearchDto>builder()
+                .items(results.hits().stream().map(mapper::toSearchDto).toList())
+                .total(results.total().hitCount())
+                .build();
     }
 
-    public DigitalObjectDto getRelatedAlto(String pid, String instanceId) {
-        DigitalObjectWithContent digitalObjectWithContent = service.findRelatedAlto(pid,
+    public AltoVersionDto getRelatedAlto(String pid, String instanceId) {
+        AltoVersionWithContent digitalObjectWithContent = service.findRelatedAlto(pid,
                 userContext.getUserId());
 
         if (digitalObjectWithContent == null) {
@@ -94,20 +102,20 @@ public class DigitalObjectFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public DigitalObjectDto getAltoVersion(String pid, Integer version) {
-        DigitalObjectWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
+    public AltoVersionDto getAltoVersion(String pid, Integer version) {
+        AltoVersionWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
 
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public DigitalObjectDto getActiveAlto(String pid) {
-        DigitalObjectWithContent digitalObjectWithContent = service.getActiveAlto(pid);
+    public AltoVersionDto getActiveAlto(String pid) {
+        AltoVersionWithContent digitalObjectWithContent = service.getActiveAlto(pid);
 
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public DigitalObjectDto createNewAltoVersion(String pid, String altoContent) {
-        DigitalObjectWithContent digitalObjectWithContent = service.updateOrCreateAlto(pid, userContext.getUserId(),
+    public AltoVersionDto createNewAltoVersion(String pid, String altoContent) {
+        AltoVersionWithContent digitalObjectWithContent = service.updateOrCreateAlto(pid, userContext.getUserId(),
                 altoContent);
 
         return mapper.toDto(digitalObjectWithContent);
@@ -124,15 +132,19 @@ public class DigitalObjectFacade {
                 userContext.getToken());
     }
 
-    public BatchDto generateAlto(String pid, BatchPriority priority) {
+    public BatchDto generateAlto(String pid, String engine, BatchPriority priority) {
         if (service.findRelated(pid, userContext.getUserId()) == null) {
-            throw new DigitalObjectNotFoundException(
+            throw new AltoVersionNotFoundException(
                     "No digital object found for PID: " + pid + " and current user");
+        }
+        if (!engineService.isEngineEnabled(engine)) {
+            throw new IllegalArgumentException("Engine '" + engine + "' is not enabled");
         }
 
         Batch batch = batchRepository.save(Batch.builder()
                 .pid(pid)
                 .priority(priority)
+                .engine(engine)
                 .build());
 
         processDispatcher.submit(processFactory.create(batch, userContext.getCurrentUser()));
@@ -141,7 +153,7 @@ public class DigitalObjectFacade {
     }
 
     public void setActive(int objectId) {
-        DigitalObjectUploadContent content = service.getDigitalObjectUploadContent(objectId);
+        AltoVersionUploadContent content = service.getAltoVersionUploadContent(objectId);
 
         krameriusService.uploadAltoOcr(content.getPid(), content.getInstance(), content.getAltoContent(),
                 content.getOcrContent(), userContext.getToken());
@@ -150,10 +162,10 @@ public class DigitalObjectFacade {
     }
 
     public void reject(int objectId) {
-        service.setStateForObject(objectId, DigitalObjectState.REJECTED);
+        service.setStateForObject(objectId, AltoVersionState.REJECTED);
     }
 
     public void archive(int objectId) {
-        service.setStateForObject(objectId, DigitalObjectState.ARCHIVED);
+        service.setStateForObject(objectId, AltoVersionState.ARCHIVED);
     }
 }

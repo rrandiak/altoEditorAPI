@@ -11,14 +11,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ObjectHierarchyNodeDto {
+public class SearchResultsDto<T> {
 
-    String pid;
-    List<ObjectHierarchyNodeDto> children;
-    String model;
-    String title;
-    Short level;
-    Short relsExtIndex;
-
-    List<Integer> versions;
+    List<T> items;
+    long total;
 }

@@ -1,7 +1,7 @@
 package cz.inovatika.altoEditor.domain.enums;
 
 /**
- * DigitalObjectState describes the review and lifecycle status of a digital object version:
+ * AltoVersionState describes the review and lifecycle status of a digital object version:
  *
  * ACTIVE   - The version currently in use (accepted and uploaded to Kramerius).
  * PENDING  - Awaiting review (created by user or generator, not yet reviewed).
@@ -17,7 +17,7 @@ package cz.inovatika.altoEditor.domain.enums;
  * - Old active versions -> ARCHIVED
  * - Curator directly archives from PENDING -> ARCHIVED
  */
-public enum DigitalObjectState {
+public enum AltoVersionState {
     ACTIVE,
     PENDING,
     REJECTED,

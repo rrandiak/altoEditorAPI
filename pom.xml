@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.9</version>
+        <version>3.5.10</version>
     </parent>
 
     <build>
@@ -51,7 +51,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>3.5.9</version>
+                <version>3.5.10</version>
                 <executions>
                     <execution>
                         <goals>
@@ -149,6 +149,7 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <version>3.5.10</version>
         </dependency>
 
         <!-- Web support -->
@@ -217,18 +218,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- Akubra Dependencies -->
-        <dependency>
-            <groupId>org.apache.solr</groupId>
-            <artifactId>solr-solrj</artifactId>
-            <version>8.8.1</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.eclipse.jetty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
 
         <!-- Fixed JAXB version -->
         <dependency>
@@ -251,16 +240,18 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- <dependency>
-            <groupId>jakarta.xml.bind</groupId>
-            <artifactId>jakarta.xml.bind-api</artifactId>
-            <version>4.0.4</version>
+
+        <!-- Hibernate Search with Lucene -->
+        <dependency>
+            <groupId>org.hibernate.search</groupId>
+            <artifactId>hibernate-search-mapper-orm</artifactId>
+            <version>7.2.5.Final</version>
         </dependency>
         <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>4.0.6</version>
-        </dependency> -->
+            <groupId>org.hibernate.search</groupId>
+            <artifactId>hibernate-search-backend-lucene</artifactId>
+            <version>7.2.5.Final</version>
+        </dependency>
 
         <!-- Lombok -->
         <dependency>

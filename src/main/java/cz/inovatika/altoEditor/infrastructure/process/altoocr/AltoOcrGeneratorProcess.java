@@ -1,11 +1,11 @@
 package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 
-import cz.inovatika.altoEditor.config.properties.ProcessorsProperties;
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.model.Batch;
-import cz.inovatika.altoEditor.domain.model.DigitalObject;
-import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
+import cz.inovatika.altoEditor.domain.model.AltoVersion;
+import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
 import cz.inovatika.altoEditor.domain.service.BatchService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
@@ -27,22 +27,22 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private final WorkDirectoryService workDirectoryService;
 
     private final BatchService batchService;
-    private final DigitalObjectRepository digitalObjectRepository;
+    private final AltoVersionRepository digitalObjectRepository;
     private final AkubraService akubraService;
     private final KrameriusService krameriusService;
 
     private final UserProfile userProfile;
-    private final ProcessorsProperties.ProcessorConfig generatorConfig;
+    private final EnginesProperties.EngineConfig generatorConfig;
 
     public AltoOcrGeneratorProcess(
             WorkDirectoryService workDirectoryService,
             BatchService batchService,
-            DigitalObjectRepository digitalObjectRepository,
+            AltoVersionRepository digitalObjectRepository,
             AkubraService akubraService,
             KrameriusService krameriusService,
             Batch batch,
             UserProfile userProfile,
-            ProcessorsProperties.ProcessorConfig generatorConfig) {
+            EnginesProperties.EngineConfig generatorConfig) {
 
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
 
@@ -67,8 +67,8 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
             workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
 
-            Optional<DigitalObject> objOpt = digitalObjectRepository
-                    .findByPidAndInstanceId(batch.getPid(), batch.getInstance()).stream().findFirst();
+            Optional<AltoVersion> objOpt = digitalObjectRepository
+                    .findFirstByDigitalObjectUuidAndInstance(batch.getUuid(), batch.getInstance()).stream().findFirst();
 
             if (objOpt.isEmpty()) {
                 batchService.setFailed(batch,
@@ -76,7 +76,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                                 + " not found.");
                 return;
             }
-            DigitalObject obj = objOpt.get();
+            AltoVersion obj = objOpt.get();
 
             batchService.setEstimatedItemCount(batch, 1);
 
@@ -85,7 +85,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
 
             workDirectoryService.saveBytesToFile(workDir, "image.jpg",
-                    krameriusService.getImageBytes(obj.getPid(), batch.getInstance(), userProfile.getToken()));
+                    krameriusService.getImageBytes(obj.getDigitalObject().getPid(), batch.getInstance(), userProfile.getToken()));
 
             // --- GENERATE ALTO/OCR ---
             // Run selected engine to generate ALTO and OCR from downloaded images
@@ -109,12 +109,12 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             batchService.setSubstate(batch, BatchSubstate.SAVING);
 
             akubraService.saveAltoContent(
-                    obj.getPid(),
+                    obj.getDigitalObject().getPid(),
                     obj.getVersion(),
                     Files.readAllBytes(new File(workDir, "output.xml").toPath()));
 
             akubraService.saveOcrContent(
-                    obj.getPid(),
+                    obj.getDigitalObject().getPid(),
                     obj.getVersion(),
                     Files.readAllBytes(new File(workDir, "output.txt").toPath()));
 

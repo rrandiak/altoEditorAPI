@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 @Builder
-public class DigitalObjectUploadContent {
+public class AltoVersionUploadContent {
     private String pid;
     private String instance;
     private byte[] altoContent;

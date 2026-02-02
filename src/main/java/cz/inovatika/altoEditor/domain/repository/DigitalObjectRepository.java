@@ -1,7 +1,6 @@
 package cz.inovatika.altoEditor.domain.repository;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -10,73 +9,52 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
+import cz.inovatika.altoEditor.domain.model.dto.PageCountStats;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 
 @Repository
 public interface DigitalObjectRepository
-        extends JpaRepository<DigitalObject, Integer>,
+        extends JpaRepository<DigitalObject, UUID>,
         JpaSpecificationExecutor<DigitalObject> {
 
     /**
-     * Find all digital objects by PID
-     */
-    List<DigitalObject> findAllByPid(String pid);
-
-    /**
-     * Check if any digital object exists with the given PID
-     */
-    boolean existsByPid(String pid);
-
-    /**
-     * Find active digital objects by PID
+     * Counts total number of direct child pages and number of those with ALTO versions.
+     * 
+     * @param uuid UUID of the digital object
      */
     @Query("""
-                SELECT d
-                FROM DigitalObject d
-                WHERE d.pid = :pid
-                AND d.state = DigitalObjectState.ACTIVE
+            SELECT 
+                COUNT(p) as totalPages,
+                COUNT(DISTINCT CASE WHEN av.id IS NOT NULL THEN p.uuid END) as pagesWithAlto
+            FROM DigitalObject p
+            LEFT JOIN AltoVersion av ON av.digitalObject.uuid = p.uuid
+            WHERE p.parent.uuid = :uuid AND p.model = 'page'
             """)
-    Optional<DigitalObject> findActive(@Param("pid") String pid);
+    PageCountStats getDirectPageStats(@Param("uuid") UUID uuid);
 
     /**
-     * Find digital object by PID and user ID
+     * Counts total number of descendant pages and number of those with ALTO versions.
+     * Uses a recursive CTE for hierarchy traversal.
+     * 
+     * @param uuid UUID of the digital object
      */
-    Optional<DigitalObject> findByPidAndUserId(String pid, Integer userId);
+    @Query(value = """
+            WITH RECURSIVE descendants AS (
+                SELECT uuid, parent_uuid, model
+                FROM object_hierarchy
+                WHERE uuid = :uuid
 
-    /**
-     * Find digital object by PID and version
-     */
-    Optional<DigitalObject> findByPidAndVersion(String pid, Integer version);
+                UNION ALL
 
-    /**
-     * Find digital object by PID and instance ID
-     */
-    Optional<DigitalObject> findByPidAndInstanceId(String pid, String instanceId);
-
-    /**
-     * Find the digital object with the highest version for the given PID
-     */
-    Optional<DigitalObject> findFirstByPidOrderByVersionDesc(String pid);
-
-    /**
-     * Find digital object by PID with priority ordering based on version and user
-     * type.
-     * The digital object is retrieved in the following order:
-     * 1. The version owned by the current user.
-     * 2. The version currently in 'ACTIVE' state.
-     */
-    @Query("""
-                SELECT d
-                FROM DigitalObject d
-                WHERE d.pid = :pid
-                    AND (d.user.id = :userId
-                        OR d.state = DigitalObjectState.ACTIVE)
-                ORDER BY CASE
-                    WHEN d.user.id = :userId THEN 0
-                    ELSE 1
-                END
-                LIMIT 1
-            """)
-    Optional<DigitalObject> findRelated(
-            @Param("pid") String pid,
-            @Param("userId") Integer userId);
+                SELECT oh.uuid, oh.parent_uuid, oh.model
+                FROM object_hierarchy oh
+                INNER JOIN descendants d ON oh.parent_uuid = d.uuid
+            )
+            SELECT
+                COUNT(CASE WHEN d.model = 'page' AND d.uuid != :uuid THEN 1 END) as total_pages,
+                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid AND av.uuid IS NOT NULL THEN d.uuid END) as pages_with_alto
+            FROM descendants d
+            LEFT JOIN alto_versions av ON av.uuid = d.uuid
+            """, nativeQuery = true)
+    PageCountStats getDescendantPageStats(@Param("uuid") UUID uuid);
 }

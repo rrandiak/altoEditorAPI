@@ -1,9 +1,11 @@
 package cz.inovatika.altoEditor.domain.model;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
@@ -11,6 +13,7 @@ import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,14 +27,15 @@ import lombok.NoArgsConstructor;
 /**
  * Batch entity with JPA annotations.
  * 
- * The batch can operate on specific PID, instance or digital object.
+ * The batch can operate on specific PID, digital object or instance.
  * - Batch generating ALTO/OCR for pages or whole hierarchies should target PID.
- * - Batch for retrieving hierarchy structure from Kramerius should target PID and instance.
  * - Batch for processing specific digital object (like re-OCR, re-indexing, etc.)
  *   should target digital object ID.
+ * - Batch for retrieving hierarchy structure from Kramerius should target PID and instance.
  */
 @Entity
 @Table(name = "batches")
+@EntityListeners(AuditingEntityListener.class)
 @Builder
 @Data
 @NoArgsConstructor
@@ -54,10 +58,23 @@ public class Batch {
     private BatchType type;
 
     /**
+     * Priority of this batch.
+     */
+    @Column(name = "priority")
+    @Builder.Default
+    private BatchPriority priority = BatchPriority.MEDIUM;
+
+    /**
      * PID of the target object for this batch.
      */
     @Column(name = "pid")
     private String pid;
+
+    /**
+     * ID of the digital object associated with this batch.
+     */
+    @Column(name = "object_id")
+    private Integer objectId;
 
     /**
      * Target Kramerius instance for this batch.
@@ -66,10 +83,10 @@ public class Batch {
     private String instance;
 
     /**
-     * ID of the digital object associated with this batch.
+     * Target engine for this batch.
      */
-    @Column(name = "object_id")
-    private Integer objectId;
+    @Column(name = "engine")
+    private String engine;
 
     /**
      * Current state of this batch.
@@ -83,13 +100,6 @@ public class Batch {
      */
     @Column(name = "substate")
     private BatchSubstate substate;
-
-    /**
-     * Priority of this batch.
-     */
-    @Column(name = "priority")
-    @Builder.Default
-    private BatchPriority priority = BatchPriority.MEDIUM;
 
     /**
      * Date of creation of this batch.
@@ -116,4 +126,14 @@ public class Batch {
      */
     @Column(name = "log", columnDefinition = "TEXT")
     private String log;
+
+    public UUID getUuid() {
+        if (this.pid == null) {
+            return null;
+        }
+        if (!this.pid.startsWith("uuid:")) {
+            throw new IllegalArgumentException("PID must start with 'uuid:'");
+        }
+        return UUID.fromString(this.pid.substring(5));
+    }
 }

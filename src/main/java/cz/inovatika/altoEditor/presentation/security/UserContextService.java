@@ -24,7 +24,7 @@ public class UserContextService {
         return getCurrentUser().getToken();
     }
 
-    public Integer getUserId() {
+    public Long getUserId() {
         if (getCurrentUser().getUserId() == null) {
             throw new RuntimeException("User ID is not available");
         }

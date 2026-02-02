@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.domain.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,7 +14,7 @@ import cz.inovatika.altoEditor.domain.model.User;
  * Spring Data JPA Repository for User entity.
  */
 @Repository
-public interface UserRepository extends JpaRepository<User, Integer> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
      * Find user by username.
@@ -30,4 +31,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
      */
     @Query("SELECT u FROM User u WHERE u.username = :#{#specialUser.getUsername()}")
     Optional<User> findSpecialUser(SpecialUser specialUser);
+
+    @Query("SELECT u FROM User u WHERE u.isEngine = true")
+    List<User> findAllIsEngine();
 }

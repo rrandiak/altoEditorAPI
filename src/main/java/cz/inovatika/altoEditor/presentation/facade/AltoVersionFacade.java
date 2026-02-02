@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
+import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
@@ -142,6 +143,7 @@ public class AltoVersionFacade {
         }
 
         Batch batch = batchRepository.save(Batch.builder()
+                .type(BatchType.GENERATE_SINGLE)
                 .pid(pid)
                 .priority(priority)
                 .engine(engine)

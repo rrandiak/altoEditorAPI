@@ -13,6 +13,8 @@ public class KrameriusObjectMetadata {
     private final String model;
     private final String title;
     private final Integer level;
+
     private final Integer indexInParent;
     private final String parentPid;
+    private final String rootPid;
 }

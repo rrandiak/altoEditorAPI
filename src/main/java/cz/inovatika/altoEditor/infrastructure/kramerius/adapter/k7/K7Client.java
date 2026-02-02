@@ -1,6 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7;
 
 import java.net.URI;
+import java.util.List;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
@@ -24,16 +25,17 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public class K7Client extends K7AbstractClient implements KrameriusClient {
 
+    private static final String METADATA_FL = "pid,model,title.search,level,own_parent.pid,rels_ext_index.sort";
+
     private final KrameriusProperties.KrameriusInstance config;
 
     private final RestTemplate restTemplate;
 
-    @Override
-    public KrameriusObjectMetadata getObjectMetadata(String pid, String token) {
+    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, String token) {
         URI uri = UriComponentsBuilder
                 .fromUriString(this.config.buildEndpoint("/search/api/client/v7.0/search"))
-                .queryParam("q", "pid:\"" + pid + "\"")
-                .queryParam("fl", "pid,title.search,own_pid_path,own_parent.title")
+                .queryParam("q", query)
+                .queryParam("fl", returnFields)
                 .build()
                 .toUri();
 
@@ -46,12 +48,55 @@ public class K7Client extends K7AbstractClient implements KrameriusClient {
                 createJsonRequestEntity(token),
                 responseType);
 
-        SolrResponse<K7ObjectMetadataDoc> solrResponse = response.getBody();
+        return response.getBody();
+    }
+
+    @Override
+    public KrameriusObjectMetadata getObjectMetadata(String pid, String token) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", METADATA_FL, token);
+
         if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
             throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
         }
 
         return solrResponse.getResponse().getDocs().get(0).toMetadata();
+    }
+
+    @Override
+    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String token) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\"", METADATA_FL,
+                token);
+
+        if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
+            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
+        }
+
+        return solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList();
+    }
+
+    @Override
+    public int getPagesCount(String pid, String token) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", "count_page", token);
+
+        if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
+            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
+        }
+
+        return solrResponse.getResponse().getDocs().get(0).getPagesCount();
+    }
+
+    @Override
+    public int getChildrenCount(String pid, String token) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
+                "own_parent.pid:\"" + pid + "\"",
+                "pid",
+                token);
+
+        if (solrResponse == null) {
+            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
+        }
+
+        return solrResponse.getResponse().getDocs().size();
     }
 
     @Override

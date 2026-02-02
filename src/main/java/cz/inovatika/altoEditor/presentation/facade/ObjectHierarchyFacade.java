@@ -56,7 +56,7 @@ public class ObjectHierarchyFacade {
 
     public BatchDto generateAlto(String pid, BatchPriority priority) {
         Batch batch = batchRepository.save(Batch.builder()
-                .type(BatchType.GENERATE)
+                .type(BatchType.GENERATE_FOR_HIERARCHY)
                 .pid(pid)
                 .priority(priority)
                 .build());

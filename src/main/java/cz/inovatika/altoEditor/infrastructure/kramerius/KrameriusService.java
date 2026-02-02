@@ -1,5 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
@@ -20,6 +22,18 @@ public class KrameriusService {
 
     public KrameriusObjectMetadata getObjectMetadata(String pid, String instanceId, String token) {
         return getClient(instanceId).getObjectMetadata(pid, token);
+    }
+
+    public int getChildrenCount(String pid, String instanceId, String token) {
+        return getClient(instanceId).getChildrenCount(pid, token);
+    }
+
+    public int getPagesCount(String pid, String instanceId, String token) {
+        return getClient(instanceId).getPagesCount(pid, token);
+    }
+    
+    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String instanceId, String token) {
+        return getClient(instanceId).getChildrenMetadata(pid, token);
     }
 
     public byte[] getFoxmlBytes(String pid, String instanceId, String token) {

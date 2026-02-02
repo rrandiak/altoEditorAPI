@@ -28,6 +28,12 @@ public class K7ObjectMetadataDoc {
     @JsonProperty("own_parent.pid")
     private String parentPid;
 
+    @JsonProperty("root.pid")
+    private String rootPid;
+
+    @JsonProperty("count_page")
+    private Integer pagesCount;
+
     public KrameriusObjectMetadata toMetadata() {
         return KrameriusObjectMetadata.builder()
                 .pid(pid)

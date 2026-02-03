@@ -18,17 +18,15 @@ import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.HierarchySearchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.KrameriusDigitalObjectDto;
 import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
-import cz.inovatika.altoEditor.presentation.facade.KrameriusFacade;
 import cz.inovatika.altoEditor.presentation.facade.ObjectHierarchyFacade;
 import lombok.RequiredArgsConstructor;
+
 @RestController
 @RequestMapping("/api/hierarchy")
 @RequiredArgsConstructor
 public class ObjectHierarchyController {
 
     private final ObjectHierarchyFacade facade;
-
-    private final KrameriusFacade krameriusFacade;
     
     /**
      * Search object hierarchy nodes with optional filters and pagination.
@@ -52,7 +50,7 @@ public class ObjectHierarchyController {
             @PathVariable String pid,
             @RequestParam(required = false) String instanceId) {
 
-        KrameriusDigitalObjectDto node = krameriusFacade.getObjectMetadata(pid, instanceId);
+        KrameriusDigitalObjectDto node = facade.getObjectMetadata(pid, instanceId);
 
         return ResponseEntity.ok(node);
     }
@@ -66,7 +64,7 @@ public class ObjectHierarchyController {
             @PathVariable String pid,
             @RequestParam(required = false) String instanceId) {
 
-        List<KrameriusDigitalObjectDto> children = krameriusFacade.getChildrenMetadata(pid, instanceId);
+        List<KrameriusDigitalObjectDto> children = facade.getChildrenMetadata(pid, instanceId);
 
         return ResponseEntity.ok(children);
     }

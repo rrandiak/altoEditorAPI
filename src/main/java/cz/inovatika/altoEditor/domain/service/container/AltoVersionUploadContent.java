@@ -9,7 +9,6 @@ import lombok.Data;
 @Builder
 public class AltoVersionUploadContent {
     private String pid;
-    private String instance;
     private byte[] altoContent;
     private byte[] ocrContent;
 }

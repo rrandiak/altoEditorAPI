@@ -14,6 +14,7 @@ import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import lombok.RequiredArgsConstructor;
 
+// TODO: rename to JobController and all related classes to Job*
 @RestController
 @RequestMapping("/api/batches")
 @RequiredArgsConstructor

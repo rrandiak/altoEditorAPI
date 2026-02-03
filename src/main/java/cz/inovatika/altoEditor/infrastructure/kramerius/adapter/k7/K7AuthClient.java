@@ -35,4 +35,10 @@ public class K7AuthClient extends K7AbstractClient implements KrameriusAuthClien
 
         return krameriusUserFactory.from(userResponse.getUid(), userResponse.getRoles());
     }
+
+    @Override
+    public String getServiceToken() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getServiceToken'");
+    }
 }

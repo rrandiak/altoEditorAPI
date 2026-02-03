@@ -89,7 +89,7 @@ public class BatchControllerIT {
         batch1.setState(BatchState.PLANNED);
         batch1.setSubstate(BatchSubstate.DOWNLOADING);
         batch1.setPriority(BatchPriority.MEDIUM);
-        batch1.setType(BatchType.GENERATE);
+        batch1.setType(BatchType.GENERATE_SINGLE);
         batch1.setInstance("instance1");
         batch1.setObjectId(100);
         batch1.setEstimatedItemCount(10);

@@ -1,24 +1,23 @@
 package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 
-import cz.inovatika.altoEditor.config.properties.EnginesProperties;
-import cz.inovatika.altoEditor.domain.enums.BatchState;
-import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
-import cz.inovatika.altoEditor.domain.model.Batch;
-import cz.inovatika.altoEditor.domain.model.AltoVersion;
-import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
-import cz.inovatika.altoEditor.domain.service.BatchService;
-import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
-import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
-import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
-import cz.inovatika.altoEditor.infrastructure.storage.WorkDirectoryService;
-import cz.inovatika.altoEditor.presentation.security.UserProfile;
-
 import java.io.File;
 import java.nio.file.Files;
-import java.util.Optional;
+import java.util.Iterator;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
+import cz.inovatika.altoEditor.domain.enums.BatchState;
+import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
+import cz.inovatika.altoEditor.domain.enums.BatchType;
+import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.service.AltoVersionService;
+import cz.inovatika.altoEditor.domain.service.BatchService;
+import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
+import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
+import cz.inovatika.altoEditor.infrastructure.storage.WorkDirectoryService;
 
 public class AltoOcrGeneratorProcess extends BatchProcess {
 
@@ -27,37 +26,56 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private final WorkDirectoryService workDirectoryService;
 
     private final BatchService batchService;
-    private final AltoVersionRepository digitalObjectRepository;
-    private final AkubraService akubraService;
+    private final AltoVersionService altoVersionService;
     private final KrameriusService krameriusService;
 
-    private final UserProfile userProfile;
-    private final EnginesProperties.EngineConfig generatorConfig;
+    private final Long engineUserId;
+    private final EnginesProperties.EngineConfig engineConfig;
 
     public AltoOcrGeneratorProcess(
             WorkDirectoryService workDirectoryService,
             BatchService batchService,
-            AltoVersionRepository digitalObjectRepository,
-            AkubraService akubraService,
+            AltoVersionService altoVersionService,
             KrameriusService krameriusService,
-            Batch batch,
-            UserProfile userProfile,
-            EnginesProperties.EngineConfig generatorConfig) {
+            Long engineUserId,
+            EnginesProperties.EngineConfig engineConfig,
+            Batch batch) {
 
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
 
         this.workDirectoryService = workDirectoryService;
+
         this.batchService = batchService;
-        this.digitalObjectRepository = digitalObjectRepository;
-        this.akubraService = akubraService;
+        this.altoVersionService = altoVersionService;
         this.krameriusService = krameriusService;
-        this.userProfile = userProfile;
-        this.generatorConfig = generatorConfig;
+
+        this.engineUserId = engineUserId;
+        this.engineConfig = engineConfig;
+    }
+
+    private Iterable<List<String>> partitionList(List<String> list, int size) {
+        return () -> new Iterator<List<String>>() {
+            private int currentIndex = 0;
+
+            @Override
+            public boolean hasNext() {
+                return currentIndex < list.size();
+            }
+
+            @Override
+            public List<String> next() {
+                int endIndex = Math.min(currentIndex + size, list.size());
+                List<String> sublist = list.subList(currentIndex, endIndex);
+                currentIndex = endIndex;
+                return sublist;
+            }
+        };
     }
 
     @Override
     public void run() {
         Batch batch = batchService.getById(batchId);
+        String instance = batch.getInstance();
         File workDir = null;
 
         try {
@@ -67,56 +85,62 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
             workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
 
-            Optional<AltoVersion> objOpt = digitalObjectRepository
-                    .findFirstByDigitalObjectUuidAndInstance(batch.getUuid(), batch.getInstance()).stream().findFirst();
+            List<String> targetPids = batch.getType() == BatchType.GENERATE_SINGLE
+                    ? List.of(batch.getPid())
+                    : altoVersionService.distinctPidsByAncestorPid(batch.getPid());
 
-            if (objOpt.isEmpty()) {
-                batchService.setFailed(batch,
-                        "Digital object with PID " + batch.getPid() + " and instance " + batch.getInstance()
-                                + " not found.");
-                return;
+            batchService.setEstimatedItemCount(batch, targetPids.size());
+
+            for (List<String> pidChunk : partitionList(targetPids, engineConfig.getBatchSize())) {
+                // --- DOWNLOAD IMAGES ---
+                // Download images from Kramerius and save them to workDir
+                batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
+
+                for (String pid : pidChunk) {
+                    workDirectoryService.saveBytesToFile(
+                            workDir,
+                            pid + ".jpg",
+                            krameriusService.getImageBytes(pid, instance));
+                }
+
+                // --- GENERATE ALTO ---
+                // Run selected engine to generate ALTO and OCR from downloaded images
+                // and save the results to workDir
+                batchService.setSubstate(batch, BatchSubstate.GENERATING);
+
+                for (String pid : pidChunk) {
+                    AltoOcrExternalProcess externalProcess = new AltoOcrExternalProcess(engineConfig,
+                            new File(workDir, pid + ".jpg"),
+                            new File(workDir, pid + ".xml"),
+                            new File(workDir, pid + ".txt"));
+
+                    externalProcess.run();
+                    if (!externalProcess.isOk()) {
+                        batchService.setFailed(batch,
+                                "Generating ALTO and OCR for PID " + batch.getPid() + " failed: "
+                                        + externalProcess.getErr());
+                        return;
+                    }
+                }
+
+                // --- SAVE RESULTS ---
+                // Save generated ALTO (and OCR ?) back to Akubra
+                batchService.setSubstate(batch, BatchSubstate.SAVING);
+
+                for (String pid : pidChunk) {
+                    altoVersionService.updateOrCreateEngineVersion(
+                            pid,
+                            this.engineUserId,
+                            Files.readAllBytes(new File(workDir, pid + ".xml").toPath()));
+                }
+
+                // --- UPDATE PROGRESS ---
+                batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + pidChunk.size());
+
+                // --- CLEANUP WORKDIR ---
+                workDirectoryService.cleanup(workDir);
+                workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
             }
-            AltoVersion obj = objOpt.get();
-
-            batchService.setEstimatedItemCount(batch, 1);
-
-            // --- DOWNLOAD IMAGES ---
-            // Download images from Kramerius and save them to workDir
-            batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
-
-            workDirectoryService.saveBytesToFile(workDir, "image.jpg",
-                    krameriusService.getImageBytes(obj.getDigitalObject().getPid(), batch.getInstance(), userProfile.getToken()));
-
-            // --- GENERATE ALTO/OCR ---
-            // Run selected engine to generate ALTO and OCR from downloaded images
-            // and save the results to workDir
-            batchService.setSubstate(batch, BatchSubstate.GENERATING);
-
-            AltoOcrExternalProcess externalProcess = new AltoOcrExternalProcess(generatorConfig,
-                    new File(workDir, "image.jpg"),
-                    new File(workDir, "output.xml"),
-                    new File(workDir, "output.txt"));
-
-            externalProcess.run();
-            if (!externalProcess.isOk()) {
-                batchService.setFailed(batch,
-                        "Generating ALTO and OCR for PID " + batch.getPid() + " failed: " + externalProcess.getErr());
-                return;
-            }
-
-            // --- SAVE RESULTS ---
-            // Save generated ALTO and OCR back to Akubra
-            batchService.setSubstate(batch, BatchSubstate.SAVING);
-
-            akubraService.saveAltoContent(
-                    obj.getDigitalObject().getPid(),
-                    obj.getVersion(),
-                    Files.readAllBytes(new File(workDir, "output.xml").toPath()));
-
-            akubraService.saveOcrContent(
-                    obj.getDigitalObject().getPid(),
-                    obj.getVersion(),
-                    Files.readAllBytes(new File(workDir, "output.txt").toPath()));
 
             // --- FINISH ---
             batchService.setState(batch, BatchState.DONE);

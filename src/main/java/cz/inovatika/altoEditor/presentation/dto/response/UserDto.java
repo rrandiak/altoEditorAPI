@@ -13,4 +13,8 @@ public class UserDto {
     
     private Integer id;
     private String username;
+
+    private Boolean isKramerius;
+    private Boolean isEngine;
+    private Boolean enabled;
 }

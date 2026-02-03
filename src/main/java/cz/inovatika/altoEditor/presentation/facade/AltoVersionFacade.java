@@ -4,20 +4,12 @@ import org.hibernate.search.engine.search.query.SearchResult;
 import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
-import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
-import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
-import cz.inovatika.altoEditor.domain.model.Batch;
-import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
-import cz.inovatika.altoEditor.domain.service.EngineService;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
-import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
-import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
-import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
@@ -43,20 +35,12 @@ public class AltoVersionFacade {
 
     private final AltoVersionMapper mapper;
 
-    private final BatchRepository batchRepository;
-
-    private final EngineService engineService;
-    
-    private final ProcessDispatcher processDispatcher;
-
-    private final AltoOcrGeneratorProcessFactory processFactory;
-
     private final BatchMapper batchMapper;
 
     public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
         SearchResult<AltoVersion> results = service.searchRelated(
                 userContext.getUserId(),
-                request.getInstanceId(),
+                request.getInstance(),
                 request.getTargetPid(),
                 request.getHierarchyPid(),
                 request.getTitle(),
@@ -75,7 +59,7 @@ public class AltoVersionFacade {
     public SearchResultsDto<AltoVersionSearchDto> searchAll(AltoVersionSearchRequest request) {
         SearchResult<AltoVersion> results = service.search(
                 request.getUsers(),
-                request.getInstanceId(),
+                request.getInstance(),
                 request.getTargetPid(),
                 request.getHierarchyPid(),
                 request.getTitle(),
@@ -96,15 +80,8 @@ public class AltoVersionFacade {
                 userContext.getUserId());
 
         if (digitalObjectWithContent == null) {
-            digitalObjectWithContent = service.fetchNewAlto(pid, instanceId, userContext.getUserId(),
-                    userContext.getToken());
+            digitalObjectWithContent = service.createInitialVersion(pid, instanceId);
         }
-
-        return mapper.toDto(digitalObjectWithContent);
-    }
-
-    public AltoVersionDto getAltoVersion(String pid, Integer version) {
-        AltoVersionWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
 
         return mapper.toDto(digitalObjectWithContent);
     }
@@ -115,9 +92,15 @@ public class AltoVersionFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
-    public AltoVersionDto createNewAltoVersion(String pid, String altoContent) {
-        AltoVersionWithContent digitalObjectWithContent = service.updateOrCreateAlto(pid, userContext.getUserId(),
-                altoContent);
+    public AltoVersionDto getAltoVersion(String pid, Integer version) {
+        AltoVersionWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
+
+        return mapper.toDto(digitalObjectWithContent);
+    }
+
+    public AltoVersionDto updateOrCreateVersion(String pid, byte[] altoContent) {
+        AltoVersionWithContent digitalObjectWithContent = service.updateOrCreateVersion(
+            pid, userContext.getUserId(), altoContent);
 
         return mapper.toDto(digitalObjectWithContent);
     }
@@ -129,45 +112,46 @@ public class AltoVersionFacade {
     public byte[] getImage(String pid, String instanceId) {
         return service.getKrameriusObjectImage(
                 pid,
-                instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId(),
-                userContext.getToken());
+                instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId());
     }
 
     public BatchDto generateAlto(String pid, String engine, BatchPriority priority) {
-        if (service.findRelated(pid, userContext.getUserId()) == null) {
-            throw new AltoVersionNotFoundException(
-                    "No digital object found for PID: " + pid + " and current user");
-        }
-        if (!engineService.isEngineEnabled(engine)) {
-            throw new IllegalArgumentException("Engine '" + engine + "' is not enabled");
-        }
-
-        Batch batch = batchRepository.save(Batch.builder()
-                .type(BatchType.GENERATE_SINGLE)
-                .pid(pid)
-                .priority(priority)
-                .engine(engine)
-                .build());
-
-        processDispatcher.submit(processFactory.create(batch, userContext.getCurrentUser()));
-
-        return batchMapper.toDto(batch);
+        return batchMapper.toDto(service.generateAlto(pid, engine, priority, userContext.getUserId()));
     }
 
-    public void setActive(int objectId) {
-        AltoVersionUploadContent content = service.getAltoVersionUploadContent(objectId);
+    /**
+     * Set the specified ALTO version as the ACTIVE version for its PID and instance.
+     * This operation:
+     * - Uploads the related ALTO and OCR content to all Kramerius instances for live use.
+     * - Changes the object's state to 'ACTIVE' (making it the default for editing and viewing).
+     * - Archives previous ACTIVE version for the same PID, only if the target ALTO version is not already ACTIVE.
+     * - Archives all STALE versions of the same PID.
+     * Target ALTO version can be in any state.
+     * When used on already ACTIVE object, it refreshes content in all Kramerius instances.
+     *
+     * Permitted state transitions are any state -> ACTIVE.
+     */
+    public void accept(int versionId) {
+        AltoVersionUploadContent content = service.getAltoVersionUploadContent(versionId);
 
-        krameriusService.uploadAltoOcr(content.getPid(), content.getInstance(), content.getAltoContent(),
-                content.getOcrContent(), userContext.getToken());
+        krameriusService.uploadAltoOcr(content.getPid(), content.getAltoContent(), content.getOcrContent());
 
-        service.setObjectActive(objectId);
+        service.accept(versionId);
     }
 
-    public void reject(int objectId) {
-        service.setStateForObject(objectId, AltoVersionState.REJECTED);
+    /**
+     * Reject an ALTO version by its ID.
+     * Only permitted state transition is PENDING -> REJECTED
+     */
+    public void reject(int versionId) {
+        service.reject(versionId);
     }
 
-    public void archive(int objectId) {
-        service.setStateForObject(objectId, AltoVersionState.ARCHIVED);
+    /**
+     * Archive an ALTO version by its ID.
+     * Only permitted state transition is PENDING -> ARCHIVED
+     */
+    public void archive(int versionId) {
+        service.archive(versionId);
     }
 }

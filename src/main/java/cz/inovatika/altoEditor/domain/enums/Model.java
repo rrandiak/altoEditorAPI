@@ -9,6 +9,10 @@ public enum Model {
         this.modelName = modelName;
     }
 
+    public boolean isModel(String modelName) {
+        return this.modelName.equals(modelName);
+    }
+    
     public String getModelName() {
         return modelName;
     }

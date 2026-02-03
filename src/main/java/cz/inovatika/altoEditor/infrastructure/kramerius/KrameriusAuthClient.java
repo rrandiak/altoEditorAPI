@@ -6,4 +6,6 @@ public interface KrameriusAuthClient {
 
     public KrameriusUser getUser(String token);
 
+    public String getServiceToken();
+
 }

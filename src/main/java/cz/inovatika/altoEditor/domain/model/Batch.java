@@ -17,6 +17,8 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -71,10 +73,10 @@ public class Batch {
     private String pid;
 
     /**
-     * ID of the digital object associated with this batch.
+     * ID of the ALTO version associated with this batch.
      */
-    @Column(name = "object_id")
-    private Integer objectId;
+    @Column(name = "alto_version_id")
+    private Integer altoVersionId;
 
     /**
      * Target Kramerius instance for this batch.
@@ -116,10 +118,23 @@ public class Batch {
     private LocalDateTime updatedAt;
 
     /**
+     * User who created this batch.
+     */
+    @ManyToOne
+    @JoinColumn(name = "created_by", referencedColumnName = "id", nullable = false)
+    private User createdBy;
+
+    /**
      * Estimated number of items in this batch.
      */
     @Column(name = "estimated_item_count")
     private Integer estimatedItemCount;
+
+    /**
+     * Number of processed items in this batch.
+     */
+    @Column(name = "processed_item_count")
+    private Integer processedItemCount;
 
     /**
      * Log information for this batch.

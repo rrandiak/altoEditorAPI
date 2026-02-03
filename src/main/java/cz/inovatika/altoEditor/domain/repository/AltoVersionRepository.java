@@ -6,11 +6,13 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
+import jakarta.transaction.Transactional;
 
 @Repository
 public interface AltoVersionRepository
@@ -39,9 +41,44 @@ public interface AltoVersionRepository
     Optional<AltoVersion> findActive(@Param("uuid") UUID uuid);
 
     /**
-     * Find digital object by UUID and user ID
+     * Find digital object by UUID and user ID in PENDING state
      */
-    Optional<AltoVersion> findByDigitalObjectUuidAndUserId(UUID uuid, Long userId);
+    @Query("""
+                SELECT d
+                FROM AltoVersion d
+                WHERE d.digitalObject.uuid = :uuid
+                AND d.user.id = :userId
+                AND d.state = AltoVersionState.PENDING
+            """)
+    Optional<AltoVersion> findPendingForUser(UUID uuid, Long userId);
+
+    @Query("""
+                SELECT d
+                FROM AltoVersion d
+                WHERE d.digitalObject.uuid = :uuid
+                AND d.user.id = :userId
+                AND d.state = AltoVersionState.ACTIVE
+            """)
+    Optional<AltoVersion> findActiveForUser(UUID uuid, Long userId);
+
+    @Query("""
+                SELECT d
+                FROM AltoVersion d
+                WHERE d.digitalObject.uuid = :uuid
+                AND d.user.id = :userId
+                AND d.state = AltoVersionState.STALE
+            """)
+    Optional<AltoVersion> findStaleForUser(UUID uuid, Long userId);
+
+    @Query("""
+                SELECT d
+                FROM AltoVersion d
+                WHERE d.digitalObject.uuid = :uuid
+                AND d.user.id = :userId
+                AND d.contentHash = :contentHash
+                AND d.state in (AltoVersionState.ACTIVE, AltoVersionState.PENDING, AltoVersionState.ARCHIVED)
+            """)
+    Optional<AltoVersion> findEngineUpdateCandidate(UUID uuid, Long userId, String contentHash);
 
     /**
      * Find digital object by UUID and version
@@ -80,4 +117,14 @@ public interface AltoVersionRepository
     Optional<AltoVersion> findRelated(
             @Param("uuid") UUID uuid,
             @Param("userId") Long userId);
+
+    @Modifying
+    @Transactional
+    @Query(value = """
+            DELETE FROM alto_version_present_in_instances
+            WHERE alto_version_id IN
+                (SELECT av.id FROM alto_versions av WHERE av.uuid = :uuid)
+                AND instance = :instance
+            """, nativeQuery = true)
+    void removeInstanceAssociation(@Param("uuid") UUID uuid, @Param("instance") String instance);
 }

@@ -29,12 +29,12 @@ public class AltoVersionController {
     private final AltoVersionFacade facade;
 
     /**
-     * Search all digital objects with optional filters and pagination.
+     * Search all ALTO versions with optional filters and pagination.
      * 
-     * @param request Search criteria for digital objects.
+     * @param request  Search criteria for ALTO versions.
      * @param pageable Pagination information.
      * 
-     * @return A paginated list of digital objects matching the search criteria.
+     * @return A paginated list of ALTO versions matching the search criteria.
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -47,17 +47,20 @@ public class AltoVersionController {
     }
 
     /**
-     * Search digital objects related to the current user with optional filters and pagination.
-     * Related digital objects are those associated with the currently authenticated user
-     * and digital objects in 'ACTIVE' state.
+     * Search ALTO versions related to the current user with optional filters and
+     * pagination.
+     * Related ALTO versions are those associated with the currently authenticated
+     * user
+     * and ALTO versions in 'ACTIVE' state.
      * 
-     * Search criteria are restricted to ensure that only digital objects linked to the user
-     * and digital objects in 'ACTIVE' state are returned.
+     * Search criteria are restricted to ensure that only ALTO versions linked to
+     * the user
+     * and ALTO versions in 'ACTIVE' state are returned.
      * 
-     * @param request Search criteria for digital objects.
+     * @param request  Search criteria for ALTO versions.
      * @param pageable Pagination information.
      * 
-     * @return A paginated list of digital objects matching the search criteria.
+     * @return A paginated list of ALTO versions matching the search criteria.
      */
     @GetMapping("/search/related")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -70,22 +73,23 @@ public class AltoVersionController {
     }
 
     /**
-     * Get ALTO content of a digital object related to the current user.
+     * Get ALTO content of the ALTO version related to the current user.
      * 
      * The ALTO content is retrieved in the following order:
      * 1. The version owned by the current user.
      * 2. The version currently in 'ACTIVE' state.
      * 3. If no ALTO is found, a new ALTO is fetched from Kramerius
-     *    using the provided instance ID and this ALTO is then returned.
+     * using the provided instance ID and this ALTO is then returned.
      * 
-     * Instance ID is used when fetching a new ALTO from Kramerius if no existing ALTO is found.
+     * Instance ID is used when fetching a new ALTO from Kramerius if no existing
+     * ALTO is found.
      * If instance ID is not provided and a new ALTO needs to be fetched,
      * default Kramerius instance will be used.
      * 
-     * @param pid The identifier of the digital object.
-     * @param instanceId The instance ID of the digital object (optional).
+     * @param pid        The identifier of the ALTO version.
+     * @param instanceId The instance ID of the ALTO version (optional).
      * 
-     * @return The ALTO content of the digital object.
+     * @return The ALTO content of the ALTO version.
      */
     @GetMapping("/{pid}/related")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -99,11 +103,11 @@ public class AltoVersionController {
     }
 
     /**
-     * Get the ALTO content of active version of a digital object.
+     * Get the ALTO content of the active version of an ALTO version.
      * 
-     * @param pid The identifier of the digital object.
+     * @param pid The identifier of the ALTO version.
      * 
-     * @return The ALTO content of the active version of the digital object.
+     * @return The ALTO content of the active version of the ALTO version.
      */
     @GetMapping("/{pid}/active")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -116,12 +120,12 @@ public class AltoVersionController {
     }
 
     /**
-     * Get ALTO content of a specific version of a digital object.
+     * Get ALTO content of a specific version of an ALTO version.
      * 
-     * @param pid The identifier of the digital object.
+     * @param pid     The identifier of the ALTO version.
      * @param version The version number of the ALTO content to retrieve.
      * 
-     * @return The ALTO content of the specified version of the digital object.
+     * @return The ALTO content of the specified version of the ALTO version.
      */
     @GetMapping("/{pid}/versions/{version}")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -135,27 +139,27 @@ public class AltoVersionController {
     }
 
     /**
-     * Get OCR text content of a digital object for the current user.
+     * Get OCR text content of an ALTO version for the current user.
      * 
-     * @param objectId The identifier of the digital object.
+     * @param versionId The identifier of the ALTO version.
      * 
-     * @return The OCR text content of the digital object.
+     * @return The OCR text content of the ALTO version.
      */
-    @GetMapping("/{objectId}/ocr")
+    @GetMapping("/{versionId}/ocr")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<String> getAltoVersionOcr(
-            @PathVariable Integer objectId) {
+            @PathVariable Integer versionId) {
 
-        String ocrContent = facade.getOcr(objectId);
+        String ocrContent = facade.getOcr(versionId);
 
         return ResponseEntity.ok(ocrContent);
     }
 
     /**
-     * Get image for a digital object.
+     * Get image for an ALTO version.
      * 
-     * @param pid The identifier of the digital object.
-     * @param instanceId The instance ID of the digital object (optional).
+     * @param pid        The identifier of the ALTO version.
+     * @param instanceId The instance ID of the ALTO version (optional).
      * 
      * @return The image bytes of the digital object.
      */
@@ -172,29 +176,29 @@ public class AltoVersionController {
 
     /**
      * Create a new version or replace pending version of ALTO content
-     * for a digital object and current user.
+     * for an ALTO version and current user.
      * 
-     * @param pid The identifier of the digital object.
+     * @param pid         The identifier of the ALTO version.
      * @param altoContent The new ALTO content to be saved.
      * 
-     * @return The updated digital object with the new ALTO version.
+     * @return The updated ALTO version with the new ALTO version.
      */
     @PostMapping("/{pid}/versions")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<AltoVersionDto> newAltoVersion(
             @PathVariable String pid,
-            @RequestBody String altoContent) {
+            @RequestBody byte[] altoContent) {
 
-        AltoVersionDto result = facade.createNewAltoVersion(pid, altoContent);
+        AltoVersionDto result = facade.updateOrCreateVersion(pid, altoContent);
 
         return ResponseEntity.ok(result);
     }
 
     /**
-     * Generate ALTO for a digital object by creating a batch process.
-     * The PID can target either a single specific digital object or a document hierarchy.
+     * Generate ALTO for an ALTO version by creating a batch process.
+     * The PID target is single specific Digital Object for which ALTO is generated.
      * 
-     * @param pid The identifier of the digital object or document hierarchy.
+     * @param pid      The identifier of the ALTO version or document hierarchy.
      * @param priority The priority of the batch process (optional).
      * 
      * @return The created batch process information.
@@ -212,61 +216,68 @@ public class AltoVersionController {
     }
 
     /**
-     * Set the specified digital object as the ACTIVE version for its PID and instance.
+     * Set the specified ALTO version as the ACTIVE version for its PID.
      * This operation:
-     * - Changes the object's state to 'ACTIVE' (making it the default for editing and viewing).
-     * - Uploads the related ALTO and OCR content to Kramerius for live use.
-     * - Archives any previously ACTIVE version for the same PID/instance.
+     * - Uploads the related ALTO and OCR content to all Kramerius instances for
+     * live use.
+     * - Changes the object's state to 'ACTIVE' (making it the default for editing
+     * and viewing).
+     * - Archives previous ACTIVE version for the same PID, only if the target ALTO
+     * version is not already ACTIVE.
+     * - Archives all STALE versions of the same PID.
+     * Target ALTO version can be in any state.
+     * When used on already ACTIVE object, it refreshes content in all Kramerius
+     * instances.
      *
-     * State transition: PENDING -> ACTIVE (previous ACTIVE becomes ARCHIVED)
+     * Permitted state transitions are any state -> ACTIVE.
      *
-     * @param objectId The ID of the digital object to activate.
+     * @param versionId The ID of the ALTO version to activate.
      * 
      * @return HTTP 200 OK if successful.
      */
-    @PostMapping("/{objectId}/set-active")
+    @PostMapping("/{versionId}/accept")
     @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<Void> setActive(
-            @PathVariable int objectId) {
+    public ResponseEntity<Void> accept(
+            @PathVariable int versionId) {
 
-        facade.setActive(objectId);
+        facade.accept(versionId);
 
         return ResponseEntity.ok().build();
     }
 
     /**
-     * Reject a digital object by its ID.
-     * State transition: PENDING -> REJECTED
+     * Reject an ALTO version by its ID.
+     * Only permitted state transition is PENDING -> REJECTED
      *
-     * @param objectId The ID of the digital object to be rejected.
+     * @param versionId The ID of the ALTO version to be rejected.
      * 
      * @return HTTP 200 OK if successful.
      */
-    @PostMapping("/{objectId}/reject")
+    @PostMapping("/{versionId}/reject")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<Void> reject(
-            @PathVariable int objectId) {
+            @PathVariable int versionId) {
 
-        facade.reject(objectId);
+        facade.reject(versionId);
 
         return ResponseEntity.ok().build();
 
     }
 
     /**
-     * Archive a digital object by its ID.
-     * State transition: ACTIVE or PENDING -> ARCHIVED
+     * Archive an ALTO version by its ID.
+     * Only permitted state transition is PENDING -> ARCHIVED
      *
-     * @param objectId The ID of the digital object to be archived.
+     * @param versionId The ID of the ALTO version to be archived.
      * 
      * @return HTTP 200 OK if successful.
      */
-    @PostMapping("/{objectId}/archive")
+    @PostMapping("/{versionId}/archive")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<Void> archive(
-            @PathVariable int objectId) {
+            @PathVariable int versionId) {
 
-        facade.archive(objectId);
+        facade.archive(versionId);
 
         return ResponseEntity.ok().build();
 

@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EngineDto {
+public class KrameriusInstanceDto {
     
     private String name;
     private Boolean enabled;

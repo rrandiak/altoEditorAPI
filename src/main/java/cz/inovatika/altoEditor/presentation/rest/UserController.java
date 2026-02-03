@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import cz.inovatika.altoEditor.presentation.dto.request.UserSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.UserDto;
 import cz.inovatika.altoEditor.presentation.facade.UserFacade;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,10 @@ public class UserController {
     @GetMapping
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<Page<UserDto>> getUsers(
+            UserSearchRequest request,
             Pageable pageable) {
 
-        Page<UserDto> page = facade.searchUsers(pageable);
+        Page<UserDto> page = facade.searchUsers(request, pageable);
 
         return ResponseEntity.ok(page);
     }

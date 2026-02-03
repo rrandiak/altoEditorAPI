@@ -40,6 +40,13 @@ public class User {
      */
     @Column(name = "username", nullable = false, unique = true)
     private String username;
+
+    /**
+     * True if this user represents Kramerius instance.
+     */
+    @Column(name = "is_kramerius", nullable = false)
+    @Builder.Default
+    private boolean isKramerius = false;
     
     /**
      * True if this user represents an ALTO OCR engine/generator.
@@ -47,4 +54,11 @@ public class User {
     @Column(name = "is_engine", nullable = false)
     @Builder.Default
     private boolean isEngine = false;
+
+    /**
+     * True if this special user (Kramerius or engine) is enabled in configuration.
+     */
+    @Column(name = "is_enabled", nullable = false)
+    @Builder.Default
+    private boolean isEnabled = true;
 }

@@ -2,7 +2,9 @@ package cz.inovatika.altoEditor.domain.model;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.hibernate.search.mapper.pojo.automaticindexing.ReindexOnUpdate;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
@@ -18,7 +20,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
@@ -82,13 +86,6 @@ public class AltoVersion {
     private User user;
 
     /**
-     * Kramerius instance ID.
-     */
-    @Column(name = "instance", length = 31, nullable = false)
-    @KeywordField
-    private String instance;
-
-    /**
      * State of this digital object.
      */
     @Column(name = "state", nullable = false)
@@ -110,6 +107,22 @@ public class AltoVersion {
     @Column(name = "updated_at", nullable = false)
     @GenericField
     private LocalDateTime updatedAt;
+
+    /**
+     * Set of Kramerius instances where this version is currently used.
+     */
+    @ElementCollection
+    @CollectionTable(name = "alto_version_present_in_instances", joinColumns = @JoinColumn(name = "alto_version_id"))
+    @Column(name = "instance")
+    @KeywordField
+    @Builder.Default
+    private Set<String> presentInInstances = new HashSet<>();
+
+    /**
+     * Hash of the ALTO content for change detection.
+     */
+    @Column(name = "content_hash", length = 32, nullable = false, unique = false)
+    private String contentHash;
 
     // --- Transient fields for search index ---
     @Transient

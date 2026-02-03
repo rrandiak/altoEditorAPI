@@ -10,7 +10,6 @@ import org.springframework.stereotype.Repository;
 
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.model.dto.PageCountStats;
-import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 
 @Repository
 public interface DigitalObjectRepository

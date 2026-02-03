@@ -11,7 +11,7 @@ public class AltoVersionSearchRequest {
 
     private List<Long> users;
 
-    private String instanceId;
+    private String instance;
 
     private String targetPid;
     private String hierarchyPid;

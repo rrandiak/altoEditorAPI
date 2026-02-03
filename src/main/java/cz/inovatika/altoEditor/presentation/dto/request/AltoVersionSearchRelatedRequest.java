@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class AltoVersionSearchRelatedRequest {
 
-    private String instanceId;
+    private String instance;
 
     private String targetPid;
     private String hierarchyPid;

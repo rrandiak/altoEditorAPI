@@ -37,5 +37,16 @@ public class EnginesProperties {
 
         @NotNull
         private Long timeout = 180_000L;
+
+        @NotNull
+        private Integer batchSize = 100;
+    }
+
+    public EngineConfig getEngineConfig(String engine) {
+        EngineConfig config = engines.get(engine);
+        if (config == null) {
+            throw new IllegalArgumentException("Engine configuration not found for engine: " + engine);
+        }
+        return config;
     }
 }

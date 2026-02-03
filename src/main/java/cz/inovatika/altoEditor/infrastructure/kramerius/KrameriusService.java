@@ -13,6 +13,7 @@ public class KrameriusService {
 
     private final KrameriusClientFactory clientFactory;
 
+    // TODO: cache clients
     private KrameriusClient getClient(String instanceId) {
         if (instanceId == null) {
             throw new IllegalArgumentException("InstanceId must be provided");
@@ -20,31 +21,40 @@ public class KrameriusService {
         return clientFactory.getClient(instanceId);
     }
 
-    public KrameriusObjectMetadata getObjectMetadata(String pid, String instanceId, String token) {
-        return getClient(instanceId).getObjectMetadata(pid, token);
+    public boolean hasPermissionToRead(String pid, String instance, String userToken) {
+        return getClient(instance).hasPermissionToRead(pid, userToken);
     }
 
-    public int getChildrenCount(String pid, String instanceId, String token) {
-        return getClient(instanceId).getChildrenCount(pid, token);
+    public KrameriusObjectMetadata getObjectMetadata(String pid, String instance) {
+        return getClient(instance).getObjectMetadata(pid);
     }
 
-    public int getPagesCount(String pid, String instanceId, String token) {
-        return getClient(instanceId).getPagesCount(pid, token);
+    public int getChildrenCount(String pid, String instance) {
+        return getClient(instance).getChildrenCount(pid);
+    }
+
+    public int getPagesCount(String pid, String instance) {
+        return getClient(instance).getPagesCount(pid);
     }
     
-    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String instanceId, String token) {
-        return getClient(instanceId).getChildrenMetadata(pid, token);
+    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String instance) {
+        return getClient(instance).getChildrenMetadata(pid);
     }
 
-    public byte[] getFoxmlBytes(String pid, String instanceId, String token) {
-        return getClient(instanceId).getFoxmlBytes(pid, token);
+    public byte[] getFoxmlBytes(String pid, String instance) {
+        return getClient(instance).getFoxmlBytes(pid);
     }
 
-    public byte[] getImageBytes(String pid, String instanceId, String token) {
-        return getClient(instanceId).getImageBytes(pid, token);
+    public byte[] getAltoBytes(String pid, String instance) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getAltoBytes'");
     }
 
-    public void uploadAltoOcr(String pid, String instanceId, byte[] alto, byte[] ocr, String token) {
-        getClient(instanceId).uploadAltoOcr(pid, alto, ocr, token);
+    public byte[] getImageBytes(String pid, String instance) {
+        return getClient(instance).getImageBytes(pid);
+    }
+
+    public void uploadAltoOcr(String pid, byte[] alto, byte[] ocr) {
+        getClient(instance).uploadAltoOcr(pid, alto, ocr);
     }
 }

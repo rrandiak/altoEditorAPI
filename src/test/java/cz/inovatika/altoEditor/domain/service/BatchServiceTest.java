@@ -49,7 +49,7 @@ class BatchServiceTest {
         testBatch.setPid("uuid:12345");
         testBatch.setState(BatchState.PLANNED);
         testBatch.setPriority(BatchPriority.MEDIUM);
-        testBatch.setType(BatchType.GENERATE);
+        testBatch.setType(BatchType.GENERATE_SINGLE);
         testBatch.setInstance("dk");
     }
 
@@ -228,7 +228,7 @@ class BatchServiceTest {
         LocalDateTime updatedAfter = LocalDateTime.now().minusDays(1);
         LocalDateTime updatedBefore = LocalDateTime.now();
         BatchPriority priority = BatchPriority.HIGH;
-        BatchType type = BatchType.GENERATE;
+        BatchType type = BatchType.GENERATE_SINGLE;
         String instanceId = "dk";
         Pageable pageable = PageRequest.of(0, 10);
 

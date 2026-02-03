@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.infrastructure.editor;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -18,7 +19,6 @@ import org.xml.sax.SAXException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-
 
 @Service
 public class AltoXmlService {
@@ -161,5 +161,26 @@ public class AltoXmlService {
                     AltoXmlService.class.getResource(path)));
         }
         return Collections.unmodifiableList(result);
+    }
+
+    public String computeHash(byte[] content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] hash = digest.digest(content);
+
+            StringBuilder hexString = new StringBuilder(2 * hash.length);
+
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("MD5 algorithm not available", e);
+        }
     }
 }

@@ -1,11 +1,14 @@
 package cz.inovatika.altoEditor.domain.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import cz.inovatika.altoEditor.domain.enums.SpecialUser;
 import cz.inovatika.altoEditor.domain.model.User;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
+import cz.inovatika.altoEditor.domain.repository.spec.UserSpecifications;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -42,6 +45,7 @@ public class UserService {
 
     /**
      * Get user by id.
+     * 
      * @param id
      * 
      * @return User entity
@@ -64,16 +68,13 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
     }
 
-    /**
-     * Get special user by username.
-     * If the user does not exist, an exception is thrown.
-     * 
-     * @param specialUser type of special user
-     * @return User entity
-     * @throws IllegalArgumentException if user does not exist
-     */
-    public User getSpecialUser(SpecialUser specialUser) {
-        return userRepository.findSpecialUser(specialUser)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + specialUser));
+    public Page<User> search(Boolean isKramerius, Boolean isEngine, Boolean isEnabled, Pageable pageable) {
+        Specification<User> spec = Specification.allOf(
+            UserSpecifications.isEngine(isEngine),
+            UserSpecifications.isKramerius(isKramerius),
+            UserSpecifications.isEnabled(isEnabled)
+        );
+
+        return userRepository.findAll(spec, pageable);
     }
 }

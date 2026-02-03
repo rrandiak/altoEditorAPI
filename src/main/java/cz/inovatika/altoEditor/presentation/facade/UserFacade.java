@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
 import cz.inovatika.altoEditor.domain.service.UserService;
+import cz.inovatika.altoEditor.presentation.dto.request.UserSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.UserDto;
 import cz.inovatika.altoEditor.presentation.mapper.UserMapper;
 import cz.inovatika.altoEditor.presentation.security.UserContextService;
@@ -23,8 +24,13 @@ public class UserFacade {
 
     private final UserMapper userMapper;
 
-    public Page<UserDto> searchUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(userMapper::toDto);
+    public Page<UserDto> searchUsers(UserSearchRequest request, Pageable pageable) {
+        return userService.search(
+            request.getIsKramerius(),
+            request.getIsEngine(),
+            request.getIsEnabled(),
+            pageable
+        ).map(userMapper::toDto);
     }
 
     public UserDto getCurrentUser() {

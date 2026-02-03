@@ -65,6 +65,12 @@ public class BatchService {
         repository.save(batch);
     }
 
+    @Transactional
+    public void setProcessedItemCount(Batch batch, int itemCount) {
+        batch.setProcessedItemCount(itemCount);
+        repository.save(batch);
+    }
+
     @Transactional(readOnly = true)
     public Page<Batch> search(String pid,
             BatchState state,

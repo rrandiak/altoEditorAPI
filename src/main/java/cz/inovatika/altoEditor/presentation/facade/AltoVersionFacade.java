@@ -21,6 +21,10 @@ import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
 import cz.inovatika.altoEditor.presentation.security.UserContextService;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Facade for ALTO version operations: search, get content (related/active/specific version),
+ * OCR, images, create/update version, state transitions, and per-page ALTO generation.
+ */
 @Component
 @RequiredArgsConstructor
 public class AltoVersionFacade {
@@ -37,6 +41,7 @@ public class AltoVersionFacade {
 
     private final BatchMapper batchMapper;
 
+    /** Search ALTO versions related to current user (or ACTIVE). */
     public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
         SearchResult<AltoVersion> results = service.searchRelated(
                 userContext.getUserId(),
@@ -56,6 +61,7 @@ public class AltoVersionFacade {
                 .build();
     }
 
+    /** Search all ALTO versions (curator; optional filters). */
     public SearchResultsDto<AltoVersionSearchDto> searchAll(AltoVersionSearchRequest request) {
         SearchResult<AltoVersion> results = service.search(
                 request.getUsers(),
@@ -75,6 +81,7 @@ public class AltoVersionFacade {
                 .build();
     }
 
+    /** Get ALTO for current user; if none, create from Kramerius and return. */
     public AltoVersionDto getRelatedAlto(String pid, String instanceId) {
         AltoVersionWithContent digitalObjectWithContent = service.findRelatedAlto(pid,
                 userContext.getUserId());
@@ -86,18 +93,21 @@ public class AltoVersionFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
+    /** Get currently active ALTO for the given page PID. */
     public AltoVersionDto getActiveAlto(String pid) {
         AltoVersionWithContent digitalObjectWithContent = service.getActiveAlto(pid);
 
         return mapper.toDto(digitalObjectWithContent);
     }
 
+    /** Get specific ALTO revision by PID and version number. */
     public AltoVersionDto getAltoVersion(String pid, Integer version) {
         AltoVersionWithContent digitalObjectWithContent = service.getAltoVersion(pid, version);
 
         return mapper.toDto(digitalObjectWithContent);
     }
 
+    /** Create new version or replace pending version for current user. */
     public AltoVersionDto updateOrCreateVersion(String pid, byte[] altoContent) {
         AltoVersionWithContent digitalObjectWithContent = service.updateOrCreateVersion(
             pid, userContext.getUserId(), altoContent);
@@ -105,6 +115,7 @@ public class AltoVersionFacade {
         return mapper.toDto(digitalObjectWithContent);
     }
 
+    /** Extract OCR text from ALTO version (by DB id). */
     public String getOcr(Integer objectId) {
         return service.getOcr(objectId);
     }
@@ -115,6 +126,7 @@ public class AltoVersionFacade {
                 instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId());
     }
 
+    /** Start per-page ALTO generation batch (selected engine). */
     public BatchDto generateAlto(String pid, String engine, BatchPriority priority) {
         return batchMapper.toDto(service.generateAlto(pid, engine, priority, userContext.getUserId()));
     }

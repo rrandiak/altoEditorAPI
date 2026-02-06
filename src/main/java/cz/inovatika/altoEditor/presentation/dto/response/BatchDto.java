@@ -12,6 +12,7 @@ import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 
+/** Batch job (ALTO generation, hierarchy retrieval, etc.) response. */
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,8 +25,9 @@ public class BatchDto {
     private BatchPriority priority;
 
     private String pid;
-    private Integer objectId;
+    private Long altoVersionId;
     private String instance;
+    private String engine;
 
     private BatchState state;
     private BatchSubstate substate;

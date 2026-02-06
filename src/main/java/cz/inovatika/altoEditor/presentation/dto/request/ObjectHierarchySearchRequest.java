@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.presentation.dto.request;
 
 import lombok.Data;
 
+/** Search request for object hierarchy (offset/limit pagination). */
 @Data
 public class ObjectHierarchySearchRequest {
     

@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import cz.inovatika.altoEditor.domain.enums.Role;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
-import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusAuthClientFactory;
+import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,11 +20,15 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.ServletException;
 
+/**
+ * Validates JWT from {@code Authorization: Bearer <token>}, resolves user via Kramerius,
+ * loads local user ID if present, and sets {@link UserProfile} in the security context.
+ */
 @Component
 @RequiredArgsConstructor
 public class AuthenticationFilter extends OncePerRequestFilter {
 
-    private final KrameriusAuthClientFactory authClientFactory;
+    private final KrameriusService krameriusService;
 
     private final UserRepository userRepository;
 
@@ -40,7 +44,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
 
-            KrameriusUser user = authClientFactory.getClient().getUser(token);
+            KrameriusUser user = krameriusService.getUser(token);
 
             UserProfile profile = new UserProfile(
                     token,

@@ -4,6 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.RoutingBinderRef;
+import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.TypeBinderRef;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.TypeBinding;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.GenericField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
+
 import cz.inovatika.altoEditor.domain.enums.Model;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -30,9 +39,13 @@ import lombok.NoArgsConstructor;
 @Builder(builderClassName = "DigitalObjectBuilder", toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
+@Indexed(routingBinder = @RoutingBinderRef(type = DigitalObjectRoutingBinder.class))
+@TypeBinding(binder = @TypeBinderRef(type = DigitalObjectCountsBinder.class))
 public class DigitalObject {
+
     @Id
     @Column(columnDefinition = "uuid")
+    @DocumentId
     private UUID uuid;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -47,15 +60,19 @@ public class DigitalObject {
     private List<DigitalObject> children = new ArrayList<>();
 
     @Column(name = "model", length = 31)
+    @KeywordField(name = "model")
     private String model;
 
     @Column(length = 255)
+    @FullTextField(name = "title")
     private String title;
 
     @Column(columnDefinition = "smallint")
+    @KeywordField(name = "level")
     private Integer level;
 
     @Column(columnDefinition = "smallint")
+    @GenericField(name = "indexInParent")
     private Integer indexInParent;
 
     @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
@@ -83,8 +100,14 @@ public class DigitalObject {
         }
     }
 
+    @KeywordField(name = "pid")
     public String getPid() {
         return "uuid:" + this.getUuid().toString();
+    }
+
+    @KeywordField(name = "parentPid")
+    public String getParentPid() {
+        return this.parent != null ? this.parent.getPid() : null;
     }
 
     public DigitalObject getRoot() {
@@ -93,6 +116,11 @@ public class DigitalObject {
             current = current.getParent();
         }
         return current;
+    }
+
+    @KeywordField(name = "rootPid")
+    public String getRootPid() {
+        return this.getRoot().getPid();
     }
 
     public boolean isPage() {

@@ -21,6 +21,10 @@ import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelated
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * REST API for ALTO versions: search, get content by page (PID) or version, OCR, images,
+ * create/update versions, state transitions (accept/reject/archive), and per-page ALTO generation.
+ */
 @RestController
 @RequestMapping("/api/alto-versions")
 @RequiredArgsConstructor
@@ -30,11 +34,10 @@ public class AltoVersionController {
 
     /**
      * Search all ALTO versions with optional filters and pagination.
-     * 
-     * @param request  Search criteria for ALTO versions.
-     * @param pageable Pagination information.
-     * 
-     * @return A paginated list of ALTO versions matching the search criteria.
+     *
+     * @param request Search criteria (users, instance, PIDs, title, date range, states)
+     *                and pagination (offset, limit) via {@link AltoVersionSearchRequest}.
+     * @return Paginated list of ALTO versions matching the criteria.
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -47,20 +50,11 @@ public class AltoVersionController {
     }
 
     /**
-     * Search ALTO versions related to the current user with optional filters and
-     * pagination.
-     * Related ALTO versions are those associated with the currently authenticated
-     * user
-     * and ALTO versions in 'ACTIVE' state.
-     * 
-     * Search criteria are restricted to ensure that only ALTO versions linked to
-     * the user
-     * and ALTO versions in 'ACTIVE' state are returned.
-     * 
-     * @param request  Search criteria for ALTO versions.
-     * @param pageable Pagination information.
-     * 
-     * @return A paginated list of ALTO versions matching the search criteria.
+     * Search ALTO versions related to the current user with optional filters and pagination.
+     * Returns only ALTO versions linked to the authenticated user or in {@code ACTIVE} state.
+     *
+     * @param request Search criteria and pagination (offset, limit) via {@link AltoVersionSearchRelatedRequest}.
+     * @return Paginated list of matching ALTO versions.
      */
     @GetMapping("/search/related")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -103,11 +97,10 @@ public class AltoVersionController {
     }
 
     /**
-     * Get the ALTO content of the active version of an ALTO version.
-     * 
-     * @param pid The identifier of the ALTO version.
-     * 
-     * @return The ALTO content of the active version of the ALTO version.
+     * Get the currently active ALTO content for a page (PID).
+     *
+     * @param pid Page identifier
+     * @return Active ALTO version DTO including content.
      */
     @GetMapping("/{pid}/active")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -120,12 +113,11 @@ public class AltoVersionController {
     }
 
     /**
-     * Get ALTO content of a specific version of an ALTO version.
-     * 
-     * @param pid     The identifier of the ALTO version.
-     * @param version The version number of the ALTO content to retrieve.
-     * 
-     * @return The ALTO content of the specified version of the ALTO version.
+     * Get a specific revision of ALTO content for a page (PID).
+     *
+     * @param pid     Page identifier (e.g. {@code uuid:...}).
+     * @param version Version number of the ALTO revision.
+     * @return ALTO version DTO for that revision.
      */
     @GetMapping("/{pid}/versions/{version}")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -139,11 +131,10 @@ public class AltoVersionController {
     }
 
     /**
-     * Get OCR text content of an ALTO version for the current user.
-     * 
-     * @param versionId The identifier of the ALTO version.
-     * 
-     * @return The OCR text content of the ALTO version.
+     * Get extracted OCR text content for an ALTO version.
+     *
+     * @param versionId Database ID of the ALTO version (not the page PID).
+     * @return Plain-text OCR content of the ALTO version.
      */
     @GetMapping("/{versionId}/ocr")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
@@ -261,7 +252,6 @@ public class AltoVersionController {
         facade.reject(versionId);
 
         return ResponseEntity.ok().build();
-
     }
 
     /**
@@ -280,6 +270,5 @@ public class AltoVersionController {
         facade.archive(versionId);
 
         return ResponseEntity.ok().build();
-
     }
 }

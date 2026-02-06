@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.presentation.dto.response;
 
 import lombok.Data;
 
+/** System / API info (e.g. version). */
 @Data
 public class InfoDto {
     

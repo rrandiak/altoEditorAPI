@@ -3,23 +3,26 @@ package cz.inovatika.altoEditor.infrastructure.kramerius;
 import java.util.List;
 
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.UploadAltoOcrResponse;
 
 public interface KrameriusClient {
-    
-    public KrameriusObjectMetadata getObjectMetadata(String pid, String token);
 
-    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String token);
+    public KrameriusUser getUser(String userToken);
 
-    public int getPagesCount(String pid, String token);
+    public boolean hasPermissionToRead(String pid, String userToken);
 
-    public int getChildrenCount(String pid, String token);
+    public KrameriusObjectMetadata getObjectMetadata(String pid);
 
-    public byte[] getImageBytes(String pid, String token);
+    public List<KrameriusObjectMetadata> getChildrenMetadata(String pid);
 
-    public byte[] getFoxmlBytes(String pid, String token);
+    public int getPagesCount(String pid);
 
-    public byte[] getAltoBytes(String pid, String token);
+    public int getChildrenCount(String pid);
 
-    public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] alto, byte[] ocr, String token);
+    public byte[] getImageBytes(String pid);
+
+    public byte[] getAltoBytes(String pid);
+
+    public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] alto, byte[] ocr);
 }

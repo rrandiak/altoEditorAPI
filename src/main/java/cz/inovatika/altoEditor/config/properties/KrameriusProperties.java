@@ -27,6 +27,12 @@ public class KrameriusProperties {
         @NotBlank
         private String url;
         private String type;
+
+        @NotBlank
+        private String serviceClientId;
+        @NotBlank
+        private String serviceSecret;
+
         private String adminUrl;
         @NotNull
         private Integer connectTimeout = 10000;

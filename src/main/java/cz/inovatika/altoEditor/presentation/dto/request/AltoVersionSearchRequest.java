@@ -6,6 +6,7 @@ import java.util.List;
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import lombok.Data;
 
+/** Search request for curator ALTO version search (all versions). */
 @Data
 public class AltoVersionSearchRequest {
 

@@ -5,9 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Search document for hierarchy search
- */
+/** Single hit in hierarchy search (local index + repository-backed page counts). */
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,9 +17,10 @@ public class HierarchySearchDto {
     private String title;
     private Integer level;
 
+    private String parentPid;
+    private Integer indexInParent;
+    private String rootPid;
+
     private Integer pagesCount;
     private Integer pagesWithAlto;
-
-    private String parentPid;
-    private String rootPid;
 }

@@ -1,10 +1,13 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius;
 
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Service;
 
+import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -13,12 +16,27 @@ public class KrameriusService {
 
     private final KrameriusClientFactory clientFactory;
 
-    // TODO: cache clients
-    private KrameriusClient getClient(String instanceId) {
-        if (instanceId == null) {
-            throw new IllegalArgumentException("InstanceId must be provided");
+    private final KrameriusProperties krameriusConfig;
+
+    private final ConcurrentHashMap<String, KrameriusClient> clientCache = new ConcurrentHashMap<>();
+
+    private KrameriusClient getClient(String instance) {
+        if (instance == null) {
+            throw new IllegalArgumentException("Instance must be provided");
         }
-        return clientFactory.getClient(instanceId);
+        return clientCache.computeIfAbsent(instance, clientFactory::getClient);
+    }
+
+    public KrameriusUser getUser(String token) {
+        for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
+            KrameriusUser user = getClient(instance).getUser(token);
+
+            if (user != null) {
+                return user;
+            }
+        }
+
+        return null;
     }
 
     public boolean hasPermissionToRead(String pid, String instance, String userToken) {
@@ -36,18 +54,13 @@ public class KrameriusService {
     public int getPagesCount(String pid, String instance) {
         return getClient(instance).getPagesCount(pid);
     }
-    
+
     public List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String instance) {
         return getClient(instance).getChildrenMetadata(pid);
     }
 
-    public byte[] getFoxmlBytes(String pid, String instance) {
-        return getClient(instance).getFoxmlBytes(pid);
-    }
-
     public byte[] getAltoBytes(String pid, String instance) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getAltoBytes'");
+        return getClient(instance).getAltoBytes(pid);
     }
 
     public byte[] getImageBytes(String pid, String instance) {
@@ -55,6 +68,8 @@ public class KrameriusService {
     }
 
     public void uploadAltoOcr(String pid, byte[] alto, byte[] ocr) {
-        getClient(instance).uploadAltoOcr(pid, alto, ocr);
+        for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
+            getClient(instance).uploadAltoOcr(pid, alto, ocr);
+        }
     }
 }

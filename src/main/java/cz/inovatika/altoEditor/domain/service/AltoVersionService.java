@@ -238,8 +238,7 @@ public class AltoVersionService {
             throw new AltoVersionAlreadyExistsException("Digital object with PID already exists: " + pid);
         }
 
-        byte[] foxml = krameriusService.getFoxmlBytes(pid, instance);
-        byte[] content = akubraService.getLatestDsVersionBinaryContent(foxml, Datastream.ALTO);
+        byte[] content = krameriusService.getAltoBytes(pid, instance);
 
         if (content == null) {
             throw new AltoNotFoundException("ALTO datastream not found in FOXML for PID: " + pid);

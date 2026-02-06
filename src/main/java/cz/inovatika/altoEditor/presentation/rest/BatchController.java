@@ -14,7 +14,12 @@ import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import lombok.RequiredArgsConstructor;
 
-// TODO: rename to JobController and all related classes to Job*
+/**
+ * REST API for batch jobs (ALTO generation, hierarchy retrieval, etc.).
+ * Batches are created via hierarchy or ALTO-version endpoints; this API allows listing and filtering them.
+ *
+ * TODO: rename to JobController and all related classes to Job*
+ */
 @RestController
 @RequestMapping("/api/batches")
 @RequiredArgsConstructor
@@ -24,6 +29,10 @@ public class BatchController {
 
     /**
      * Search batches with optional filters and pagination.
+     *
+     * @param request  Optional filters (PID, state, substate, date range, priority, type, instance).
+     * @param pageable Standard Spring pagination (page, size, sort).
+     * @return Paginated list of batch DTOs.
      */
     @GetMapping
     @PreAuthorize("hasAuthority('CURATOR')")

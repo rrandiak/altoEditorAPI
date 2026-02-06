@@ -11,6 +11,7 @@ import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
 import lombok.RequiredArgsConstructor;
 
+/** Facade for batch job search (list/filter batches). */
 @Component
 @RequiredArgsConstructor
 public class BatchFacade {
@@ -19,6 +20,7 @@ public class BatchFacade {
 
     private final BatchMapper mapper;
 
+    /** Search batches with filters and Spring pagination. */
     public Page<BatchDto> searchBatches(
             BatchSearchRequest request,
             Pageable pageable) {

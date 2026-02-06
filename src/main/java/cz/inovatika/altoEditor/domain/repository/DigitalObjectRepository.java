@@ -18,7 +18,7 @@ public interface DigitalObjectRepository
 
     /**
      * Counts total number of direct child pages and number of those with ALTO versions.
-     * 
+     *
      * @param uuid UUID of the digital object
      */
     @Query("""
@@ -33,8 +33,9 @@ public interface DigitalObjectRepository
 
     /**
      * Counts total number of descendant pages and number of those with ALTO versions.
-     * Uses a recursive CTE for hierarchy traversal.
-     * 
+     * Uses a recursive CTE for hierarchy traversal (no Java recursion, no DB columns).
+     * Aliases match PageCountStats getters (getTotalPages, getPagesWithAlto).
+     *
      * @param uuid UUID of the digital object
      */
     @Query(value = """
@@ -50,8 +51,8 @@ public interface DigitalObjectRepository
                 INNER JOIN descendants d ON oh.parent_uuid = d.uuid
             )
             SELECT
-                COUNT(CASE WHEN d.model = 'page' AND d.uuid != :uuid THEN 1 END) as total_pages,
-                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid AND av.uuid IS NOT NULL THEN d.uuid END) as pages_with_alto
+                COUNT(CASE WHEN d.model = 'page' AND d.uuid != :uuid THEN 1 END) as "totalPages",
+                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid AND av.uuid IS NOT NULL THEN d.uuid END) as "pagesWithAlto"
             FROM descendants d
             LEFT JOIN alto_versions av ON av.uuid = d.uuid
             """, nativeQuery = true)

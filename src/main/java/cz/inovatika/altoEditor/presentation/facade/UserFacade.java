@@ -12,6 +12,7 @@ import cz.inovatika.altoEditor.presentation.mapper.UserMapper;
 import cz.inovatika.altoEditor.presentation.security.UserContextService;
 import lombok.RequiredArgsConstructor;
 
+/** Facade for user operations: search users, get/create current user profile. */
 @Component
 @RequiredArgsConstructor
 public class UserFacade {
@@ -24,6 +25,7 @@ public class UserFacade {
 
     private final UserMapper userMapper;
 
+    /** Search users with optional filters and Spring pagination. */
     public Page<UserDto> searchUsers(UserSearchRequest request, Pageable pageable) {
         return userService.search(
             request.getIsKramerius(),
@@ -33,11 +35,13 @@ public class UserFacade {
         ).map(userMapper::toDto);
     }
 
+    /** Get current authenticated user profile (must exist in DB). */
     public UserDto getCurrentUser() {
         return userRepository.findById(userContext.getUserId()).map(userMapper::toDto)
                 .orElseThrow(() -> new IllegalStateException("Current user not found"));
     }
 
+    /** Create or get local user profile for current authenticated user. */
     public UserDto createCurrentUser() {
         return userMapper.toDto(userService.createUser(userContext.getUid(), userContext.getUsername()));
     }

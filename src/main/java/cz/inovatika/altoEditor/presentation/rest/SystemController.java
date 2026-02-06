@@ -9,11 +9,19 @@ import org.springframework.web.bind.annotation.RestController;
 import cz.inovatika.altoEditor.presentation.dto.response.InfoDto;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * REST API for system-level information (e.g. application version).
+ */
 @RestController
 @RequestMapping("/api/system")
 @RequiredArgsConstructor
 public class SystemController {
 
+    /**
+     * Returns basic system/app information (e.g. API version).
+     *
+     * @return Info DTO; currently contains {@link InfoDto#getVersion() version}.
+     */
     @GetMapping("/info")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<InfoDto> getInfo() {

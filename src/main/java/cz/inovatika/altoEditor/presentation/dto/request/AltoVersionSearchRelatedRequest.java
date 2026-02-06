@@ -6,6 +6,7 @@ import java.util.List;
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import lombok.Data;
 
+/** Search request for related ALTO versions (current user + ACTIVE). */
 @Data
 public class AltoVersionSearchRelatedRequest {
 

@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** Digital object metadata from Kramerius (with children/pages counts). */
 @Data
 @Builder
 @NoArgsConstructor

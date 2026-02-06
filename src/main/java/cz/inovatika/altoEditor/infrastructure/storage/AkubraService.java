@@ -5,12 +5,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import org.ceskaexpedice.fedoramodel.DatastreamType;
-import org.ceskaexpedice.fedoramodel.DatastreamVersionType;
 import org.ceskaexpedice.fedoramodel.DigitalObject;
 import org.fcrepo.server.errors.LowlevelStorageException;
 import org.fcrepo.server.storage.lowlevel.akubra.AkubraLowlevelStorage;
@@ -70,42 +67,6 @@ public class AkubraService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private DigitalObject unmarshallObject(InputStream foxml) {
-        Unmarshaller unmarshaller = null;
-
-        try {
-            unmarshaller = unmarshallerPool.take();
-
-            return (DigitalObject) unmarshaller.unmarshal(foxml);
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-
-        } finally {
-            if (unmarshaller != null) {
-                unmarshallerPool.offer(unmarshaller);
-            }
-        }
-    }
-
-    public byte[] getLatestDsVersionBinaryContent(byte[] foxml, Datastream ds) {
-        DigitalObject digitalObject = unmarshallObject(new ByteArrayInputStream(foxml));
-
-        for (DatastreamType datastreamType : digitalObject.getDatastream()) {
-
-            if (datastreamType.getID().equals(ds.name())) {
-                List<DatastreamVersionType> dvs = datastreamType.getDatastreamVersion();
-
-                int lastVersionIndex = dvs.size() - 1;
-                byte[] binaryContent = dvs.get(lastVersionIndex).getBinaryContent();
-
-                return binaryContent;
-            }
-        }
-
-        return null;
     }
 
     private String getDsKey(String pid, Datastream ds, int version) {

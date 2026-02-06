@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** Kramerius instance reference (name, enabled flag). */
 @Data
 @Builder
 @NoArgsConstructor

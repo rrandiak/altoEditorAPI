@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
+import cz.inovatika.altoEditor.domain.model.dto.PageCountStats;
+import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.domain.service.ObjectHierarchyService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.presentation.dto.request.ObjectHierarchySearchRequest;
@@ -21,11 +23,17 @@ import cz.inovatika.altoEditor.presentation.mapper.ObjectHierarchyMapper;
 import cz.inovatika.altoEditor.presentation.security.UserContextService;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Facade for object hierarchy: search local index, fetch metadata/children from Kramerius,
+ * and trigger batch jobs (fetch hierarchy, generate ALTO for subtree).
+ */
 @Component
 @RequiredArgsConstructor
 public class ObjectHierarchyFacade {
 
     private final ObjectHierarchyService service;
+
+    private final DigitalObjectRepository digitalObjectRepository;
 
     private final ObjectHierarchyMapper mapper;
 
@@ -39,6 +47,7 @@ public class ObjectHierarchyFacade {
 
     private final BatchMapper batchMapper;
 
+    /** Search hierarchy nodes; enriches each hit with page counts from repository. */
     public SearchResultsDto<HierarchySearchDto> search(ObjectHierarchySearchRequest request) {
         SearchResult<DigitalObject> result = service.search(
                 request.getPid(),
@@ -50,11 +59,20 @@ public class ObjectHierarchyFacade {
                 request.getLimit());
 
         return SearchResultsDto.<HierarchySearchDto>builder()
-                .items(result.hits().stream().map(mapper::toDto).toList())
+                .items(result.hits().stream()
+                        .map(obj -> {
+                            HierarchySearchDto dto = mapper.toSearchDto(obj);
+                            PageCountStats stats = digitalObjectRepository.getDescendantPageStats(obj.getUuid());
+                            dto.setPagesCount(stats != null ? stats.getTotalPages() : null);
+                            dto.setPagesWithAlto(stats != null ? stats.getPagesWithAlto() : null);
+                            return dto;
+                        })
+                        .toList())
                 .total(result.total().hitCount())
                 .build();
     }
 
+    /** Get object metadata from Kramerius (with children/pages counts). */
     public KrameriusDigitalObjectDto getObjectMetadata(String pid, String instance) {
         if (instance == null) {
             instance = krameriusConfig.getDefaultInstanceId();
@@ -66,6 +84,7 @@ public class ObjectHierarchyFacade {
                 krameriusService.getPagesCount(pid, instance));
     }
 
+    /** Get children metadata from Kramerius for the given PID. */
     public List<KrameriusDigitalObjectDto> getChildrenMetadata(String pid, String instance) {
         String finalInstance = instance == null ? krameriusConfig.getDefaultInstanceId() : instance;
 
@@ -77,10 +96,12 @@ public class ObjectHierarchyFacade {
                 .toList();
     }
 
+    /** Start batch to generate ALTO for hierarchy rooted at PID. */
     public BatchDto generateAlto(String pid, BatchPriority priority) {
         return batchMapper.toDto(service.generateAlto(pid, priority, userContext.getUserId()));
     }
 
+    /** Start batch to fetch hierarchy from Kramerius and store locally. */
     public BatchDto fetchFromKramerius(String pid, BatchPriority priority) {
         return batchMapper.toDto(service.fetchFromKramerius(pid, priority, userContext.getUserId()));
     }

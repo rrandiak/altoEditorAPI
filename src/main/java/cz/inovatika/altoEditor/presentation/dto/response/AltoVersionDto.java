@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** Single ALTO version response; {@code content} is ALTO XML (Base64 in JSON). */
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,5 +25,5 @@ public class AltoVersionDto {
 
     private String title;
 
-    private String altoContent;
+    private byte[] content;
 }

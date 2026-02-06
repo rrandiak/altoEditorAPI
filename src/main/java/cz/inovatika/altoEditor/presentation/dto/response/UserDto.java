@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** User profile response (editor/curator or Kramerius/engine user). */
 @Data
 @Builder
 @NoArgsConstructor
@@ -16,5 +17,5 @@ public class UserDto {
 
     private Boolean isKramerius;
     private Boolean isEngine;
-    private Boolean enabled;
+    private Boolean isEnabled;
 }

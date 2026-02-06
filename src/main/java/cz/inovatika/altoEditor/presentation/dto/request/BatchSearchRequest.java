@@ -1,15 +1,16 @@
 package cz.inovatika.altoEditor.presentation.dto.request;
 
-import lombok.Data;
+import java.time.LocalDateTime;
+
 import org.springframework.format.annotation.DateTimeFormat;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
+import lombok.Data;
 
-import java.time.LocalDateTime;
-
+/** Filter request for batch job search (used with Spring Pageable). */
 @Data
 public class BatchSearchRequest {
 

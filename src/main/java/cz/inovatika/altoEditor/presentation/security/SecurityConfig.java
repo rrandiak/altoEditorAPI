@@ -10,6 +10,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Security configuration: all endpoints require authentication.
+ * JWT is validated by {@link AuthenticationFilter}; method-level rules use {@code @PreAuthorize}.
+ * CSRF is disabled (stateless API).
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)

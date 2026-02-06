@@ -4,24 +4,26 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/** ALTO version hit in search results (curator or related search). */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class AltoVersionSearchDto {
 
-    Long id;
-
-    String pid;
-    Integer version;
-    String instance;
-
-    String username;
-
-    AltoVersionState state;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
-
-    String pageTitle;
-    Integer pageIndex;
-
-    List<String> ancestorPids;
-    List<String> ancestorTitles;
+    private Long id;
+    private String pid;
+    private Integer version;
+    private String instance;
+    private String username;
+    private AltoVersionState state;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String pageTitle;
+    private Integer pageIndex;
+    private List<String> ancestorPids;
+    private List<String> ancestorTitles;
 }

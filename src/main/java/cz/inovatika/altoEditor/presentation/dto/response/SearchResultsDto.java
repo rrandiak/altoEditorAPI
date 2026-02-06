@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** Generic paginated search result (offset/limit style). */
 @Data
 @Builder
 @NoArgsConstructor

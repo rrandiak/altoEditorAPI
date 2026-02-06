@@ -21,15 +21,22 @@ import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
 import cz.inovatika.altoEditor.presentation.facade.ObjectHierarchyFacade;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * REST API for the digital object hierarchy: search local hierarchy, fetch metadata and children
+ * from Kramerius, and trigger batch jobs to fetch hierarchy or generate ALTO for a subtree.
+ */
 @RestController
 @RequestMapping("/api/hierarchy")
 @RequiredArgsConstructor
 public class ObjectHierarchyController {
 
     private final ObjectHierarchyFacade facade;
-    
+
     /**
-     * Search object hierarchy nodes with optional filters and pagination.
+     * Search object hierarchy nodes (monographs, periods, pages, etc.) with optional filters and pagination.
+     *
+     * @param request Filters (PID, parent PID, model, title, level) and pagination (offset, limit).
+     * @return Search result with total count and list of hierarchy nodes (counts from repository).
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -42,7 +49,11 @@ public class ObjectHierarchyController {
     }
 
     /**
-     * Get object metadata from Kramerius by PID.
+     * Get digital object metadata from Kramerius by PID.
+     *
+     * @param pid        Page or object identifier (e.g. {@code uuid:...}).
+     * @param instanceId Optional Kramerius instance ID; default used if omitted.
+     * @return Metadata DTO including children count and pages count from Kramerius.
      */
     @GetMapping("/{pid}/from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -56,7 +67,11 @@ public class ObjectHierarchyController {
     }
 
     /**
-     * Get object children metadata from Kramerius by PID.
+     * Get children metadata from Kramerius for a given object PID.
+     *
+     * @param pid        Parent object identifier (e.g. {@code uuid:...}).
+     * @param instanceId Optional Kramerius instance ID; default used if omitted.
+     * @return List of child object metadata DTOs.
      */
     @GetMapping("/{pid}/children-from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
@@ -69,6 +84,14 @@ public class ObjectHierarchyController {
         return ResponseEntity.ok(children);
     }
 
+    /**
+     * Start a batch job to generate ALTO for the hierarchy rooted at the given PID.
+     * The batch type is {@code GENERATE_FOR_HIERARCHY}; engine is chosen by the process.
+     *
+     * @param pid     Root object identifier (e.g. monograph UUID).
+     * @param priority Optional batch priority.
+     * @return Created batch DTO.
+     */
     @PostMapping("/{pid}/generate-alto")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> generateAlto(
@@ -80,6 +103,14 @@ public class ObjectHierarchyController {
         return ResponseEntity.ok(batch);
     }
     
+    /**
+     * Start a batch job to fetch the object hierarchy from Kramerius and store it locally.
+     * The batch type is {@code RETRIEVE_HIERARCHY}.
+     *
+     * @param pid     Root or leaf PID to start from (e.g. page or monograph UUID).
+     * @param priority Optional batch priority.
+     * @return Created batch DTO.
+     */
     @PostMapping("/{pid}/fetch-from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> fetchFromKramerius(

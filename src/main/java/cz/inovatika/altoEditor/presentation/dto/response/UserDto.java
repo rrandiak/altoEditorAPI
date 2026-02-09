@@ -11,11 +11,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserDto {
-    
-    private Integer id;
+
+    private Long id;
     private String username;
 
-    private Boolean isKramerius;
-    private Boolean isEngine;
-    private Boolean isEnabled;
+    private boolean kramerius;
+    private boolean engine;
+    private boolean enabled;
 }

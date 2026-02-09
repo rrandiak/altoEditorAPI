@@ -13,14 +13,12 @@ import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
+import cz.inovatika.altoEditor.domain.model.dto.PageCountStats;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
-import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
-import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
-import cz.inovatika.altoEditor.infrastructure.process.retrieve.RetrieveHierarchyProcessFactory;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 
@@ -37,12 +35,6 @@ public class ObjectHierarchyService {
     private final UserService userService;
 
     private final BatchRepository batchRepository;
-
-    private final ProcessDispatcher processDispatcher;
-
-    private final AltoOcrGeneratorProcessFactory altoGeneratorProcessFactory;
-
-    private final RetrieveHierarchyProcessFactory retrieveHierarchyProcessFactory;
 
     public SearchResult<DigitalObject> search(String pid, String parentPid, String model, String title, Integer level,
             int offset, int limit) {
@@ -132,6 +124,7 @@ public class ObjectHierarchyService {
                     .build());
         }
 
+        refreshPageCountsForAncestors(parent.getUuid());
         return parent;
     }
 
@@ -155,10 +148,30 @@ public class ObjectHierarchyService {
                 .parent(parent)
                 .build();
 
-        return digitalObjectRepository.save(digitalObject);
+        DigitalObject saved = digitalObjectRepository.save(digitalObject);
+        refreshPageCountsForAncestors(saved.getUuid());
+        return saved;
     }
 
-    public Batch generateAlto(String pid, BatchPriority priority, Long userId) {
+    /**
+     * Recomputes {@link DigitalObject#getPagesCount()} and {@link DigitalObject#getPagesWithAlto()}
+     * for the given node and all its ancestors, and persists the values.
+     * Call after hierarchy or ALTO changes that affect descendant pages.
+     */
+    public void refreshPageCountsForAncestors(java.util.UUID uuid) {
+        DigitalObject current = digitalObjectRepository.findById(uuid).orElse(null);
+        while (current != null) {
+            PageCountStats stats = digitalObjectRepository.getDescendantPageStats(current.getUuid());
+            int total = stats != null && stats.getTotalPages() != null ? stats.getTotalPages() : 0;
+            int withAlto = stats != null && stats.getPagesWithAlto() != null ? stats.getPagesWithAlto() : 0;
+            current.setPagesCount(total);
+            current.setPagesWithAlto(withAlto);
+            digitalObjectRepository.save(current);
+            current = current.getParent();
+        }
+    }
+
+    public Batch createGenerateAltoBatch(String pid, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.GENERATE_FOR_HIERARCHY)
                 .pid(pid)
@@ -166,20 +179,16 @@ public class ObjectHierarchyService {
                 .createdBy(userService.getUserById(userId))
                 .build());
 
-        processDispatcher.submit(altoGeneratorProcessFactory.create(batch));
-
         return batch;
     }
 
-    public Batch fetchFromKramerius(String pid, BatchPriority priority, Long userId) {
+    public Batch createFetchFromKrameriusBatch(String pid, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.RETRIEVE_HIERARCHY)
                 .pid(pid)
                 .priority(priority)
                 .createdBy(userService.getUserById(userId))
                 .build());
-
-        processDispatcher.submit(retrieveHierarchyProcessFactory.create(batch));
 
         return batch;
     }

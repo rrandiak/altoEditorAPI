@@ -57,15 +57,6 @@ public interface AltoVersionRepository
                 FROM AltoVersion d
                 WHERE d.digitalObject.uuid = :uuid
                 AND d.user.id = :userId
-                AND d.state = AltoVersionState.ACTIVE
-            """)
-    Optional<AltoVersion> findActiveForUser(UUID uuid, Long userId);
-
-    @Query("""
-                SELECT d
-                FROM AltoVersion d
-                WHERE d.digitalObject.uuid = :uuid
-                AND d.user.id = :userId
                 AND d.state = AltoVersionState.STALE
             """)
     Optional<AltoVersion> findStaleForUser(UUID uuid, Long userId);
@@ -84,11 +75,6 @@ public interface AltoVersionRepository
      * Find digital object by UUID and version
      */
     Optional<AltoVersion> findByDigitalObjectUuidAndVersion(UUID uuid, Integer version);
-
-    /**
-     * Find digital object by UUID and instance ID
-     */
-    Optional<AltoVersion> findFirstByDigitalObjectUuidAndInstance(UUID uuid, String instance);
 
     /**
      * Find the digital object with the highest version for the given UUID

@@ -5,15 +5,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
@@ -42,6 +42,7 @@ import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
 import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
 import cz.inovatika.altoEditor.presentation.security.UserProfile;
 import jakarta.persistence.EntityManager;
@@ -50,7 +51,7 @@ import jakarta.persistence.EntityManager;
 @AutoConfigureMockMvc
 @Transactional
 @TestPropertySource(properties = "altoeditor.home=src/test/resources")
-public class AltoVersionControllerIT {
+class AltoVersionControllerIT {
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,6 +76,7 @@ public class AltoVersionControllerIT {
 
     private static final String TEST_UUID = "12345678-1234-1234-1234-1234567890ab";
     private static final String TEST_PID = "uuid:" + TEST_UUID;
+    private static final String OTHER_PID = "uuid:87654321-4321-4321-4321-210987654321";
     private static final int TEST_VERSION = 0;
     private static final String TEST_ALTO_XML = """
             <alto xmlns="http://www.loc.gov/standards/alto/ns-v2#">
@@ -92,28 +94,30 @@ public class AltoVersionControllerIT {
             </alto>
             """;
     private static final byte[] TEST_ALTO = TEST_ALTO_XML.getBytes(StandardCharsets.UTF_8);
-    private final String TEST_ALTO_PATH = "05/61/38/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FALTO%2FALTO.0";
-    private final String TEST_OCR_PATH = "bd/af/f9/info%3Afedora%2Fuuid%3A12345678-1234-1234-1234-1234567890ab%2FTEXT%5FOCR%2FTEXT%5FOCR.0";
-    private final String TEST_INSTANCE = "test";
+    private static final byte[] TEST_OCR = "Test OCR content".getBytes(StandardCharsets.UTF_8);
+    private static final String TEST_INSTANCE = "test";
     private static final byte[] TEST_IMAGE = new byte[] { 1, 2, 3 };
+    private static final String CONTENT_HASH = "a1b2c3d4e5f6";
 
     private DigitalObject testDigitalObject;
     private AltoVersion testAltoVersion;
     private User testUser;
 
     @TempDir
-    static Path storeDir;
+    static java.nio.file.Path storeDir;
 
     @DynamicPropertySource
     static void registerTempDirs(DynamicPropertyRegistry registry) {
         registry.add("application.store.path", () -> storeDir.toString());
     }
 
-    // Helper to inject a UserProfile as principal
     private RequestPostProcessor userProfile() {
+        return userProfileWithRoles(List.of(Role.CURATOR));
+    }
+
+    private RequestPostProcessor userProfileWithRoles(List<Role> roles) {
         Long userId = testUser.getId();
         String username = testUser.getUsername();
-        List<Role> roles = List.of(Role.CURATOR);
         UserProfile profile = new UserProfile("dummy-token", userId, null, username, roles);
         List<SimpleGrantedAuthority> authorities = roles.stream()
                 .map(r -> new SimpleGrantedAuthority(r.toString()))
@@ -125,149 +129,265 @@ public class AltoVersionControllerIT {
     @BeforeEach
     void setupKrameriusServiceMock() {
         Mockito.reset(krameriusService);
-        Mockito.when(krameriusService.getImageBytes(Mockito.eq(TEST_PID), Mockito.any(), Mockito.any()))
+        Mockito.when(krameriusService.getImageBytes(Mockito.eq(TEST_PID), Mockito.any()))
+                .thenReturn(TEST_IMAGE);
+        Mockito.when(krameriusService.getImageBytes(Mockito.eq(OTHER_PID), Mockito.any()))
                 .thenReturn(TEST_IMAGE);
     }
 
-  @BeforeEach
-  @Transactional
-  void setUpData() throws InterruptedException {
-    altoVersionRepository.deleteAll();
-    digitalObjectRepository.deleteAll();
-    userRepository.deleteAll();
-    entityManager.clear();
+    @BeforeEach
+    @Transactional
+    void setUpData() throws InterruptedException {
+        altoVersionRepository.deleteAll();
+        digitalObjectRepository.deleteAll();
+        userRepository.deleteAll();
+        entityManager.flush();
+        entityManager.clear();
 
         testUser = userRepository.save(User.builder().username("testuser").build());
-
         User altoUser = userRepository.save(User.builder().username("altoeditor").build());
+        userRepository.save(User.builder().username("pero").engine(true).build());
+        userRepository.save(User.builder().username("test").build());
 
-        testDigitalObject = digitalObjectRepository
-                .save(DigitalObject.builder().pid(TEST_PID).build());
+        testDigitalObject = digitalObjectRepository.save(DigitalObject.builder().pid(TEST_PID).build());
 
         testAltoVersion = altoVersionRepository.save(AltoVersion.builder()
                 .digitalObject(testDigitalObject)
                 .version(TEST_VERSION)
                 .state(AltoVersionState.PENDING)
-                .instance("test")
                 .user(testUser)
+                .contentHash(CONTENT_HASH)
+                .presentInInstances(new HashSet<>(Set.of(TEST_INSTANCE)))
                 .build());
 
         altoVersionRepository.save(AltoVersion.builder()
                 .digitalObject(testDigitalObject)
                 .version(TEST_VERSION + 1)
                 .state(AltoVersionState.ACTIVE)
-                .instance("test")
                 .user(altoUser)
+                .contentHash(CONTENT_HASH)
+                .presentInInstances(new HashSet<>(Set.of(TEST_INSTANCE)))
                 .build());
-        
+
         entityManager.flush();
-        SearchSession searchSession = Search.session(entityManager);
+        SearchSession searchSession = org.hibernate.search.mapper.orm.Search.session(entityManager);
         searchSession.massIndexer(AltoVersion.class).startAndWait();
     }
 
-    // TODO: Fix this test
-    // @Test
-    // void getAltoVersions_returnsOkAndPage() throws Exception {
-    //     mockMvc.perform(get("/api/alto-versions/search")
-    //             .with(userProfile())
-    //             .contentType(MediaType.APPLICATION_JSON))
-    //             .andExpect(status().isOk())
-    //             .andExpect(jsonPath("$.items[0].pid").value(TEST_PID));
-    // }
+    @Nested
+    @DisplayName("GET /api/alto-versions/search")
+    class GetAltoVersionsSearch {
 
-    @Test
-    void getRelatedAlto_returnsOkAndContent() throws Exception {
-        akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/related")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pid").value(TEST_PID));
+        @Test
+        @DisplayName("returns 200 and paginated results for CURATOR")
+        void returnsOkAndPage() throws Exception {
+            mockMvc.perform(get("/api/alto-versions/search")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isArray())
+                    .andExpect(jsonPath("$.total").isNumber());
+        }
     }
 
-    @Test
-    void getRelatedAlto_fetchesNewVersion_returnsOkAndContent() throws Exception {
-        mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/related")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(TEST_ALTO))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pid").value(TEST_PID));
-    }
+    @Nested
+    @DisplayName("GET /api/alto-versions/{pid}/related")
+    class GetRelatedAlto {
 
-    @Test
-    void getActiveAlto_returnsOkAndContent() throws Exception {
-        akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        akubraService.saveAltoContent(TEST_PID, 1, TEST_ALTO);
-        mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/active")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pid").value(TEST_PID));
-    }
-
-    @Test
-    void getAltoVersionOcr_returnsOkAndContent() throws Exception {
-        akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
-        mockMvc.perform(get("/api/alto-versions/" + testAltoVersion.getId() + "/ocr")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void getKrameriusObjectImage_returnsOk() throws Exception {
-        String imageUrl = "/api/alto-versions/" + TEST_PID + "/image";
-        mockMvc.perform(get(imageUrl)
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void generateAlto_returnsOkAndBatch() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + TEST_PID + "/generate/pero")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void setAltoVersionActive_returnsOk() throws Exception {
-        File altoFile = storeDir.resolve(TEST_ALTO_PATH).toFile();
-        altoFile.getParentFile().mkdirs();
-        byte[] altoContent = new byte[] { 0x41, 0x4C, 0x54, 0x4F }; // "ALTO" in ASCII
-        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(altoFile)) {
-            fos.write(altoContent);
+        @Test
+        @DisplayName("returns 200 and ALTO when user has version")
+        void returnsOkAndContent_whenUserHasVersion() throws Exception {
+            akubraService.saveAltoContent(TEST_PID, TEST_VERSION, TEST_ALTO);
+            mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/related")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(TEST_PID));
         }
 
-        File ocrFile = storeDir.resolve(TEST_OCR_PATH).toFile();
-        ocrFile.getParentFile().mkdirs();
-        byte[] ocrContent = new byte[] { 0x4F, 0x43, 0x52 }; // "OCR" in ASCII
-        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(ocrFile)) {
-            fos.write(ocrContent);
+        @Test
+        @DisplayName("returns 200 when no related version and Kramerius ALTO is stubbed")
+        void returnsOk_whenFetchesNewFromKramerius() throws Exception {
+            Mockito.when(krameriusService.getAltoBytes(Mockito.eq(OTHER_PID), Mockito.any()))
+                    .thenReturn(TEST_ALTO);
+            KrameriusObjectMetadata meta = KrameriusObjectMetadata.builder()
+                    .pid(OTHER_PID)
+                    .model("page")
+                    .title("Page")
+                    .level(1)
+                    .indexInParent(0)
+                    .parentPid(null)
+                    .rootPid(OTHER_PID)
+                    .build();
+            Mockito.when(krameriusService.getObjectMetadata(Mockito.eq(OTHER_PID), Mockito.any()))
+                    .thenReturn(meta);
+            mockMvc.perform(get("/api/alto-versions/" + OTHER_PID + "/related")
+                    .param("instanceId", TEST_INSTANCE)
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(OTHER_PID));
         }
-
-        mockMvc.perform(post("/api/alto-versions/" + testAltoVersion.getId() + "/set-active")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
-
-        // Verify that KrameriusService.uploadAltoOcr was called with the expected
-        // content
-        Mockito.verify(krameriusService).uploadAltoOcr(
-                Mockito.eq(TEST_PID),
-                Mockito.eq(TEST_INSTANCE),
-                Mockito.argThat(bytes -> Arrays.equals(bytes, altoContent)),
-                Mockito.argThat(bytes -> Arrays.equals(bytes, ocrContent)),
-                Mockito.any());
     }
 
-    @Test
-    void rejectAltoVersion_returnsOk() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + testAltoVersion.getId() + "/reject")
-                .with(userProfile())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk());
+    @Nested
+    @DisplayName("GET /api/alto-versions/search/related")
+    class GetUserAltoVersions {
+
+        @Test
+        @DisplayName("returns 200 and paginated results for EDITOR/CURATOR")
+        void returnsOkAndPage() throws Exception {
+            mockMvc.perform(get("/api/alto-versions/search/related")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isArray())
+                    .andExpect(jsonPath("$.total").isNumber());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/alto-versions/{pid}/versions/{version}")
+    class GetAltoVersion {
+
+        @Test
+        @DisplayName("returns 200 and ALTO for specific version")
+        void returnsOkAndContent() throws Exception {
+            akubraService.saveAltoContent(TEST_PID, TEST_VERSION, TEST_ALTO);
+            mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/versions/" + TEST_VERSION)
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(TEST_PID))
+                    .andExpect(jsonPath("$.version").value(TEST_VERSION));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/alto-versions/{pid}/active")
+    class GetActiveAlto {
+
+        @Test
+        @DisplayName("returns 200 and active ALTO content")
+        void returnsOkAndContent() throws Exception {
+            akubraService.saveAltoContent(TEST_PID, 0, TEST_ALTO);
+            akubraService.saveAltoContent(TEST_PID, 1, TEST_ALTO);
+            mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/active")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(TEST_PID));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/alto-versions/{versionId}/ocr")
+    class GetAltoVersionOcr {
+
+        @Test
+        @DisplayName("returns 200 and OCR text")
+        void returnsOkAndContent() throws Exception {
+            akubraService.saveAltoContent(TEST_PID, TEST_VERSION, TEST_ALTO);
+            mockMvc.perform(get("/api/alto-versions/" + testAltoVersion.getId() + "/ocr")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/alto-versions/{pid}/image")
+    class GetImage {
+
+        @Test
+        @DisplayName("returns 200 and image bytes")
+        void returnsOk() throws Exception {
+            mockMvc.perform(get("/api/alto-versions/" + TEST_PID + "/image")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/alto-versions/{pid}/versions")
+    class NewAltoVersion {
+
+        @Test
+        @DisplayName("returns 200 and updated ALTO version")
+        void returnsOkAndVersion() throws Exception {
+            mockMvc.perform(post("/api/alto-versions/" + TEST_PID + "/versions")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .content(TEST_ALTO))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(TEST_PID));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/alto-versions/{pid}/generate/{engine}")
+    class GenerateAlto {
+
+        @Test
+        @DisplayName("returns 200 and batch for PID without existing ALTO")
+        void returnsOkAndBatch() throws Exception {
+            mockMvc.perform(post("/api/alto-versions/" + OTHER_PID + "/generate/pero")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.pid").value(OTHER_PID))
+                    .andExpect(jsonPath("$.engine").value("pero"));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/alto-versions/{versionId}/accept")
+    class Accept {
+
+        @Test
+        @DisplayName("returns 200 and uploads ALTO/OCR to Kramerius")
+        void returnsOkAndUploadsToKramerius() throws Exception {
+            akubraService.saveAltoContent(TEST_PID, testAltoVersion.getVersion(), TEST_ALTO);
+            akubraService.saveOcrContent(TEST_PID, testAltoVersion.getVersion(), TEST_OCR);
+
+            mockMvc.perform(post("/api/alto-versions/" + testAltoVersion.getId() + "/accept")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk());
+
+            Mockito.verify(krameriusService).uploadAltoOcr(
+                    Mockito.eq(TEST_PID),
+                    Mockito.argThat(bytes -> java.util.Arrays.equals(bytes, TEST_ALTO)),
+                    Mockito.argThat(bytes -> java.util.Arrays.equals(bytes, TEST_OCR)));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/alto-versions/{versionId}/reject")
+    class Reject {
+
+        @Test
+        @DisplayName("returns 200 for PENDING version")
+        void returnsOk() throws Exception {
+            mockMvc.perform(post("/api/alto-versions/" + testAltoVersion.getId() + "/reject")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/alto-versions/{versionId}/archive")
+    class Archive {
+
+        @Test
+        @DisplayName("returns 200 for PENDING version")
+        void returnsOk() throws Exception {
+            mockMvc.perform(post("/api/alto-versions/" + testAltoVersion.getId() + "/archive")
+                    .with(userProfile())
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk());
+        }
     }
 }

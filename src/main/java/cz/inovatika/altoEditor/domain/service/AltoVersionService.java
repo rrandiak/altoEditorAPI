@@ -30,8 +30,6 @@ import cz.inovatika.altoEditor.exception.AltoVersionAlreadyExistsException;
 import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
-import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
-import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -58,10 +56,6 @@ public class AltoVersionService {
 
     private final BatchRepository batchRepository;
 
-    private final ProcessDispatcher processDispatcher;
-
-    private final AltoOcrGeneratorProcessFactory processFactory;
-
     @Transactional(readOnly = true)
     public SearchResult<AltoVersion> searchRelated(
             Long userId,
@@ -85,7 +79,7 @@ public class AltoVersionService {
                     // userId or ACTIVE state
                     var userOrActive = f.bool()
                             .should(f.match().field("username").matching(username))
-                            .should(f.match().field("state").matching(AltoVersionState.ACTIVE.name()));
+                            .should(f.match().field("state").matching(AltoVersionState.ACTIVE));
                     bool.must(userOrActive);
                     if (instance != null) {
                         bool.must(f.match().field("instance").matching(instance));
@@ -110,7 +104,7 @@ public class AltoVersionService {
                         bool.must(f.range().field("createdAt").atMost(createdBefore));
                     }
                     if (states != null && !states.isEmpty()) {
-                        bool.must(f.terms().field("state").matchingAny(states.stream().map(Enum::name).toList()));
+                        bool.must(f.terms().field("state").matchingAny(states));
                     }
                     return bool;
                 });
@@ -166,7 +160,7 @@ public class AltoVersionService {
                         bool.must(f.range().field("createdAt").atMost(createdBefore));
                     }
                     if (states != null && !states.isEmpty()) {
-                        bool.must(f.terms().field("state").matchingAny(states.stream().map(Enum::name).toList()));
+                        bool.must(f.terms().field("state").matchingAny(states));
                     }
                     return bool;
                 });
@@ -249,10 +243,14 @@ public class AltoVersionService {
         akubraService.saveAltoContent(pid, 0, content);
 
         // Save under user of used Kramerius instance
+        String contentHash = altoXmlService.computeHash(content);
         AltoVersion obj = repository.save(
                 AltoVersion.builder().user(userService.getUserByUsername(instance))
                         .digitalObject(targetObj)
-                        .version(0).build());
+                        .version(0)
+                        .state(AltoVersionState.ACTIVE)
+                        .contentHash(contentHash)
+                        .build());
 
         return new AltoVersionWithContent(obj, content);
     }
@@ -345,9 +343,9 @@ public class AltoVersionService {
             return new AltoVersionWithContent(altoVersion, altoContent);
         }
 
-        return new AltoVersionWithContent(
-                createNewAltoVersion(pid, userId, altoContent, AltoVersionState.PENDING),
-                altoContent);
+        AltoVersion created = createNewAltoVersion(pid, userId, altoContent, AltoVersionState.PENDING);
+        objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+        return new AltoVersionWithContent(created, altoContent);
     }
 
     /**
@@ -370,6 +368,7 @@ public class AltoVersionService {
             AltoVersion altoVersion = createNewAltoVersion(pid, userId, content, AltoVersionState.ACTIVE);
             altoVersion.getPresentInInstances().add(userService.getUserById(userId).getUsername());
             repository.save(altoVersion);
+            objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
             return altoVersion;
         }
 
@@ -394,6 +393,7 @@ public class AltoVersionService {
 
         altoVersion.getPresentInInstances().add(instance);
         repository.save(altoVersion);
+        objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
 
         return altoVersion;
     }
@@ -415,11 +415,13 @@ public class AltoVersionService {
                 altoVersion.setState(AltoVersionState.PENDING);
                 repository.save(altoVersion);
             }
-
+            objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
             return altoVersion;
         }
 
-        return createNewAltoVersion(pid, userId, content, AltoVersionState.PENDING);
+        AltoVersion created = createNewAltoVersion(pid, userId, content, AltoVersionState.PENDING);
+        objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+        return created;
     }
 
     public String getOcr(Integer objectId) {
@@ -443,7 +445,7 @@ public class AltoVersionService {
         return krameriusService.getImageBytes(pid, instance);
     }
 
-    public Batch generateAlto(String pid, String engine, BatchPriority priority, Long userId) {
+    public Batch createGenerateAltoBatch(String pid, String engine, BatchPriority priority, Long userId) {
         if (repository.existsByDigitalObjectUuid(PidAdapter.toUuid(pid))) {
             throw new AltoVersionNotFoundException(
                     "No digital object found for PID: " + pid + " and current user");
@@ -459,8 +461,6 @@ public class AltoVersionService {
                 .engine(engine)
                 .createdBy(userService.getUserById(userId))
                 .build());
-
-        processDispatcher.submit(processFactory.create(batch));
 
         return batch;
     }
@@ -496,6 +496,7 @@ public class AltoVersionService {
         updated.add(digitalObject);
 
         repository.saveAll(updated);
+        objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
     }
 
     /**
@@ -514,6 +515,7 @@ public class AltoVersionService {
         digitalObject.setState(AltoVersionState.REJECTED);
 
         repository.save(digitalObject);
+        objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
     }
 
     /**
@@ -532,6 +534,7 @@ public class AltoVersionService {
         digitalObject.setState(AltoVersionState.ARCHIVED);
 
         repository.save(digitalObject);
+        objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
     }
 
     public AltoVersionUploadContent getAltoVersionUploadContent(int objectId) {

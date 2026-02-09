@@ -32,17 +32,7 @@ public interface UserRepository extends JpaRepository<User, Long>,
     @Query("""
             SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END
             FROM User u
-            WHERE u.username = :username AND u.isEngine = true
+            WHERE u.username = :username AND u.engine = true
             """)
     boolean existsEngineByUsername(String username);
-
-    /**
-     * Find Kramerius user.
-     */
-    @Query("""
-            SELECT u
-            FROM User u
-            WHERE u.isKramerius = true AND u.username = :username
-            """)
-    Optional<User> findKrameriusByUsername(String username);
 }

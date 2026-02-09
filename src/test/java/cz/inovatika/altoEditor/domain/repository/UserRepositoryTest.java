@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -30,56 +31,107 @@ class UserRepositoryTest {
         repository.deleteAll();
     }
 
-    @Test
-    @DisplayName("Find by username should return user when exists")
-    void findByUsername_shouldReturnUser_whenExists() {    
-        // Given
-        User user1 = User.builder().username("testuser").build();
-        User user2 = User.builder().username("anotheruser").build();
-        repository.saveAll(List.of(user1, user2));
-        entityManager.flush();
+    @Nested
+    @DisplayName("save")
+    class Save {
 
-        // When
-        Optional<User> found = repository.findByUsername("testuser");
+        @Test
+        @DisplayName("persists user and assigns id")
+        void persistsUserAndAssignsId() {
+            User user = User.builder().username("testuser").build();
 
-        // Then
-        assertThat(found).isPresent();
-        assertThat(found.get().getId()).isPositive();
-        assertThat(found.get().getUsername()).isEqualTo("testuser");
+            User saved = repository.save(user);
+            entityManager.flush();
+
+            assertThat(saved.getId()).isNotNull();
+            assertThat(saved.getUsername()).isEqualTo("testuser");
+        }
     }
 
-    @Test
-    @DisplayName("Find by username should return empty when user does not exist")
-    void findByUsername_shouldReturnEmpty_whenNotExists() {
-        // When
-        Optional<User> found = repository.findByUsername("nonexistent");
+    @Nested
+    @DisplayName("findByUsername")
+    class FindByUsername {
 
-        // Then
-        assertThat(found).isNotPresent();
+        @Test
+        @DisplayName("returns user when username exists")
+        void returnsUser_whenExists() {
+            repository.saveAll(List.of(
+                    User.builder().username("user1").build(),
+                    User.builder().username("user2").build()));
+            entityManager.flush();
+
+            Optional<User> found = repository.findByUsername("user1");
+
+            assertThat(found).isPresent();
+            assertThat(found.get().getId()).isPositive();
+            assertThat(found.get().getUsername()).isEqualTo("user1");
+        }
+
+        @Test
+        @DisplayName("returns empty when username does not exist")
+        void returnsEmpty_whenNotExists() {
+            Optional<User> found = repository.findByUsername("nonexistent");
+
+            assertThat(found).isEmpty();
+        }
     }
 
-    @Test
-    @DisplayName("Exists by username should return true when user exists")
-    void existsByUsername_shouldReturnTrue_whenExists() {
-        // Given
-        User user = User.builder().username("existinguser").build();
-        repository.save(user);
-        entityManager.flush();
+    @Nested
+    @DisplayName("existsByUsername")
+    class ExistsByUsername {
 
-        // When
-        boolean exists = repository.existsByUsername("existinguser");
+        @Test
+        @DisplayName("returns true when user exists")
+        void returnsTrue_whenExists() {
+            repository.save(User.builder().username("existing").build());
+            entityManager.flush();
 
-        // Then
-        assertThat(exists).isTrue();
+            boolean exists = repository.existsByUsername("existing");
+
+            assertThat(exists).isTrue();
+        }
+
+        @Test
+        @DisplayName("returns false when user does not exist")
+        void returnsFalse_whenNotExists() {
+            boolean exists = repository.existsByUsername("nonexistent");
+
+            assertThat(exists).isFalse();
+        }
     }
 
-    @Test
-    @DisplayName("Exists by username should return false when user does not exist")
-    void existsByUsername_shouldReturnFalse_whenNotExists() {
-        // When
-        boolean exists = repository.existsByUsername("nonexistentuser");
+    @Nested
+    @DisplayName("existsEngineByUsername")
+    class ExistsEngineByUsername {
 
-        // Then
-        assertThat(exists).isFalse();
+        @Test
+        @DisplayName("returns true when user exists and isEngine is true")
+        void returnsTrue_whenUserIsEngine() {
+            repository.save(User.builder().username("tesseract").engine(true).build());
+            entityManager.flush();
+
+            boolean exists = repository.existsEngineByUsername("tesseract");
+
+            assertThat(exists).isTrue();
+        }
+
+        @Test
+        @DisplayName("returns false when user exists but isEngine is false")
+        void returnsFalse_whenUserIsNotEngine() {
+            repository.save(User.builder().username("editor").engine(false).build());
+            entityManager.flush();
+
+            boolean exists = repository.existsEngineByUsername("editor");
+
+            assertThat(exists).isFalse();
+        }
+
+        @Test
+        @DisplayName("returns false when username does not exist")
+        void returnsFalse_whenUserNotExists() {
+            boolean exists = repository.existsEngineByUsername("nonexistent");
+
+            assertThat(exists).isFalse();
+        }
     }
 }

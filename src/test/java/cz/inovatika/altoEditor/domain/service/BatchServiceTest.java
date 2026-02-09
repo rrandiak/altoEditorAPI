@@ -1,20 +1,22 @@
 package cz.inovatika.altoEditor.domain.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,352 +32,288 @@ import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
+import cz.inovatika.altoEditor.exception.BatchNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class BatchServiceTest {
 
     @Mock
-    private BatchRepository batchRepository;
+    private BatchRepository repository;
 
     @InjectMocks
-    private BatchService batchService;
+    private BatchService service;
 
-    private Batch testBatch;
+    private Batch batch;
 
     @BeforeEach
     void setUp() {
-        testBatch = new Batch();
-        testBatch.setId(1);
-        testBatch.setPid("uuid:12345");
-        testBatch.setState(BatchState.PLANNED);
-        testBatch.setPriority(BatchPriority.MEDIUM);
-        testBatch.setType(BatchType.GENERATE_SINGLE);
-        testBatch.setInstance("dk");
+        batch = Batch.builder()
+                .id(1)
+                .pid("uuid:12345")
+                .state(BatchState.PLANNED)
+                .priority(BatchPriority.MEDIUM)
+                .type(BatchType.GENERATE_SINGLE)
+                .instance("dk")
+                .build();
     }
 
-    @Test
-    @DisplayName("Find waiting batches should return PLANNED batches ordered by ID")
-    void findWaitingBatches_shouldReturnPlannedBatches() {
-        // Given
-        Batch batch1 = new Batch();
-        batch1.setId(1);
-        batch1.setState(BatchState.PLANNED);
+    @Nested
+    @DisplayName("getById")
+    class GetById {
 
-        Batch batch2 = new Batch();
-        batch2.setId(2);
-        batch2.setState(BatchState.PLANNED);
+        @Test
+        @DisplayName("returns batch when found")
+        void returnsBatch_whenFound() {
+            when(repository.findById(1)).thenReturn(Optional.of(batch));
 
-        List<Batch> expectedBatches = List.of(batch1, batch2);
-        when(batchRepository.findByStateOrderByIdAsc(BatchState.PLANNED))
-                .thenReturn(expectedBatches);
+            Batch result = service.getById(1);
 
-        // When
-        List<Batch> result = batchService.findWaitingBatches();
+            assertThat(result).isEqualTo(batch);
+            verify(repository).findById(1);
+        }
 
-        // Then
-        assertThat(result).hasSize(2);
-        assertThat(result).isEqualTo(expectedBatches);
-        verify(batchRepository).findByStateOrderByIdAsc(BatchState.PLANNED);
+        @Test
+        @DisplayName("throws BatchNotFoundException when not found")
+        void throws_whenNotFound() {
+            when(repository.findById(999)).thenReturn(Optional.empty());
+
+            assertThrows(BatchNotFoundException.class, () -> service.getById(999));
+            verify(repository).findById(999);
+        }
     }
 
-    @Test
-    @DisplayName("Find waiting batches should return empty list when no PLANNED batches")
-    void findWaitingBatches_shouldReturnEmptyList_whenNoBatches() {
-        // Given
-        when(batchRepository.findByStateOrderByIdAsc(BatchState.PLANNED))
-                .thenReturn(List.of());
+    @Nested
+    @DisplayName("findWaitingBatches")
+    class FindWaitingBatches {
 
-        // When
-        List<Batch> result = batchService.findWaitingBatches();
+        @Test
+        @DisplayName("returns PLANNED batches ordered by id")
+        void returnsPlannedBatchesOrderedById() {
+            List<Batch> planned = List.of(
+                    Batch.builder().id(1).state(BatchState.PLANNED).build(),
+                    Batch.builder().id(2).state(BatchState.PLANNED).build());
+            when(repository.findByStateOrderByIdAsc(BatchState.PLANNED)).thenReturn(planned);
 
-        // Then
-        assertThat(result).isEmpty();
-        verify(batchRepository).findByStateOrderByIdAsc(BatchState.PLANNED);
+            List<Batch> result = service.findWaitingBatches();
+
+            assertThat(result).hasSize(2);
+            assertThat(result).isEqualTo(planned);
+            verify(repository).findByStateOrderByIdAsc(BatchState.PLANNED);
+        }
+
+        @Test
+        @DisplayName("returns empty list when no PLANNED batches")
+        void returnsEmpty_whenNone() {
+            when(repository.findByStateOrderByIdAsc(BatchState.PLANNED)).thenReturn(List.of());
+
+            List<Batch> result = service.findWaitingBatches();
+
+            assertThat(result).isEmpty();
+        }
     }
 
-    @Test
-    @DisplayName("Find running batches should return RUNNING batches ordered by ID")
-    void findRunningBatches_shouldReturnRunningBatches() {
-        // Given
-        Batch batch1 = new Batch();
-        batch1.setId(1);
-        batch1.setState(BatchState.RUNNING);
+    @Nested
+    @DisplayName("findRunningBatches")
+    class FindRunningBatches {
 
-        Batch batch2 = new Batch();
-        batch2.setId(2);
-        batch2.setState(BatchState.RUNNING);
+        @Test
+        @DisplayName("returns RUNNING batches ordered by id")
+        void returnsRunningBatchesOrderedById() {
+            List<Batch> running = List.of(
+                    Batch.builder().id(1).state(BatchState.RUNNING).build(),
+                    Batch.builder().id(2).state(BatchState.RUNNING).build());
+            when(repository.findByStateOrderByIdAsc(BatchState.RUNNING)).thenReturn(running);
 
-        List<Batch> expectedBatches = List.of(batch1, batch2);
-        when(batchRepository.findByStateOrderByIdAsc(BatchState.RUNNING))
-                .thenReturn(expectedBatches);
+            List<Batch> result = service.findRunningBatches();
 
-        // When
-        List<Batch> result = batchService.findRunningBatches();
-
-        // Then
-        assertThat(result).hasSize(2);
-        assertThat(result).isEqualTo(expectedBatches);
-        verify(batchRepository).findByStateOrderByIdAsc(BatchState.RUNNING);
+            assertThat(result).hasSize(2);
+            assertThat(result).isEqualTo(running);
+            verify(repository).findByStateOrderByIdAsc(BatchState.RUNNING);
+        }
     }
 
-    @Test
-    @DisplayName("Set state should update batch state and save")
-    void setState_shouldUpdateStateAndSave() {
-        // Given
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("setState")
+    class SetState {
 
-        // When
-        batchService.setState(testBatch, BatchState.RUNNING);
+        @Test
+        @DisplayName("updates state and saves")
+        void updatesStateAndSaves() {
+            when(repository.save(batch)).thenReturn(batch);
 
-        // Then
-        assertThat(testBatch.getState()).isEqualTo(BatchState.RUNNING);
-        verify(batchRepository).save(testBatch);
+            service.setState(batch, BatchState.RUNNING);
+
+            assertThat(batch.getState()).isEqualTo(BatchState.RUNNING);
+            verify(repository).save(batch);
+        }
+
+        @Test
+        @DisplayName("saves on each state transition")
+        void savesOnEachTransition() {
+            when(repository.save(batch)).thenReturn(batch);
+
+            service.setState(batch, BatchState.RUNNING);
+            service.setState(batch, BatchState.DONE);
+
+            assertThat(batch.getState()).isEqualTo(BatchState.DONE);
+            verify(repository, times(2)).save(batch);
+        }
     }
 
-    @Test
-    @DisplayName("Set state should handle state transitions correctly")
-    void setState_shouldHandleStateTransitions() {
-        // Given
-        testBatch.setState(BatchState.PLANNED);
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("setSubstate")
+    class SetSubstate {
 
-        // When - transition through states
-        batchService.setState(testBatch, BatchState.RUNNING);
-        assertThat(testBatch.getState()).isEqualTo(BatchState.RUNNING);
+        @Test
+        @DisplayName("updates substate and saves")
+        void updatesSubstateAndSaves() {
+            when(repository.save(batch)).thenReturn(batch);
 
-        batchService.setState(testBatch, BatchState.DONE);
-        assertThat(testBatch.getState()).isEqualTo(BatchState.DONE);
+            service.setSubstate(batch, BatchSubstate.DOWNLOADING);
 
-        // Then
-        verify(batchRepository, times(2)).save(testBatch);
+            assertThat(batch.getSubstate()).isEqualTo(BatchSubstate.DOWNLOADING);
+            verify(repository).save(batch);
+        }
+
+        @Test
+        @DisplayName("saves on each substate change")
+        void savesOnEachChange() {
+            when(repository.save(batch)).thenReturn(batch);
+
+            service.setSubstate(batch, BatchSubstate.DOWNLOADING);
+            service.setSubstate(batch, BatchSubstate.GENERATING);
+
+            assertThat(batch.getSubstate()).isEqualTo(BatchSubstate.GENERATING);
+            verify(repository, times(2)).save(batch);
+        }
     }
 
-    @Test
-    @DisplayName("Set substate should update batch substate and save")
-    void setSubstate_shouldUpdateSubstateAndSave() {
-        // Given
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("setFailed")
+    class SetFailed {
 
-        // When
-        batchService.setSubstate(testBatch, BatchSubstate.DOWNLOADING);
+        @Test
+        @DisplayName("sets state to FAILED and log message, then saves")
+        void setsFailedStateAndLog() {
+            String reason = "Processing failed due to timeout";
+            when(repository.save(batch)).thenReturn(batch);
 
-        // Then
-        assertThat(testBatch.getSubstate()).isEqualTo(BatchSubstate.DOWNLOADING);
-        verify(batchRepository).save(testBatch);
+            service.setFailed(batch, reason);
+
+            assertThat(batch.getState()).isEqualTo(BatchState.FAILED);
+            assertThat(batch.getLog()).isEqualTo(reason);
+            verify(repository).save(batch);
+        }
+
+        @Test
+        @DisplayName("overwrites existing log")
+        void overwritesExistingLog() {
+            batch.setLog("Previous log");
+            when(repository.save(batch)).thenReturn(batch);
+
+            service.setFailed(batch, "New failure reason");
+
+            assertThat(batch.getLog()).isEqualTo("New failure reason");
+        }
     }
 
-    @Test
-    @DisplayName("Set substate should handle substate transitions")
-    void setSubstate_shouldHandleSubstateTransitions() {
-        // Given
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("setEstimatedItemCount")
+    class SetEstimatedItemCount {
 
-        // When - transition through substates
-        batchService.setSubstate(testBatch, BatchSubstate.DOWNLOADING);
-        assertThat(testBatch.getSubstate()).isEqualTo(BatchSubstate.DOWNLOADING);
+        @Test
+        @DisplayName("sets estimated item count and saves")
+        void setsCountAndSaves() {
+            when(repository.save(batch)).thenReturn(batch);
 
-        batchService.setSubstate(testBatch, BatchSubstate.GENERATING);
-        assertThat(testBatch.getSubstate()).isEqualTo(BatchSubstate.GENERATING);
+            service.setEstimatedItemCount(batch, 100);
 
-        batchService.setSubstate(testBatch, BatchSubstate.SAVING);
-        assertThat(testBatch.getSubstate()).isEqualTo(BatchSubstate.SAVING);
-
-        // Then
-        verify(batchRepository, times(3)).save(testBatch);
+            assertThat(batch.getEstimatedItemCount()).isEqualTo(100);
+            verify(repository).save(batch);
+        }
     }
 
-    @Test
-    @DisplayName("Set failed should update state to FAILED and set log")
-    void setFailed_shouldUpdateStateAndLog() {
-        // Given
-        String reason = "Processing failed due to timeout";
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("setProcessedItemCount")
+    class SetProcessedItemCount {
 
-        // When
-        batchService.setFailed(testBatch, reason);
+        @Test
+        @DisplayName("sets processed item count and saves")
+        void setsCountAndSaves() {
+            when(repository.save(batch)).thenReturn(batch);
 
-        // Then
-        assertThat(testBatch.getState()).isEqualTo(BatchState.FAILED);
-        assertThat(testBatch.getLog()).isEqualTo(reason);
-        verify(batchRepository).save(testBatch);
+            service.setProcessedItemCount(batch, 50);
+
+            assertThat(batch.getProcessedItemCount()).isEqualTo(50);
+            verify(repository).save(batch);
+        }
     }
 
-    @Test
-    @DisplayName("Set failed should overwrite existing log")
-    void setFailed_shouldOverwriteExistingLog() {
-        // Given
-        testBatch.setLog("Previous log");
-        String newReason = "New failure reason";
-        when(batchRepository.save(testBatch)).thenReturn(testBatch);
+    @Nested
+    @DisplayName("search")
+    @SuppressWarnings("unchecked")
+    class Search {
 
-        // When
-        batchService.setFailed(testBatch, newReason);
+        @Test
+        @DisplayName("delegates to repository with specification and pageable")
+        void delegatesToRepository() {
+            Pageable pageable = PageRequest.of(0, 10);
+            Page<Batch> expectedPage = new PageImpl<>(List.of(batch));
+            when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(expectedPage);
 
-        // Then
-        assertThat(testBatch.getLog()).isEqualTo(newReason);
-        verify(batchRepository).save(testBatch);
-    }
+            Page<Batch> result = service.search(
+                    "uuid:12345", BatchState.RUNNING, BatchSubstate.DOWNLOADING,
+                    LocalDateTime.now().minusDays(7), LocalDateTime.now(),
+                    LocalDateTime.now().minusDays(1), LocalDateTime.now(),
+                    BatchPriority.HIGH, BatchType.GENERATE_SINGLE, "dk",
+                    pageable);
 
-    @Test
-    @DisplayName("Search with all parameters should build correct specification")
-    void search_shouldBuildCorrectSpecification() {
-        // Given
-        String pid = "uuid:12345";
-        BatchState state = BatchState.RUNNING;
-        BatchSubstate substate = BatchSubstate.DOWNLOADING;
-        LocalDateTime createdAfter = LocalDateTime.now().minusDays(7);
-        LocalDateTime createdBefore = LocalDateTime.now();
-        LocalDateTime updatedAfter = LocalDateTime.now().minusDays(1);
-        LocalDateTime updatedBefore = LocalDateTime.now();
-        BatchPriority priority = BatchPriority.HIGH;
-        BatchType type = BatchType.GENERATE_SINGLE;
-        String instanceId = "dk";
-        Pageable pageable = PageRequest.of(0, 10);
+            assertThat(result).isNotNull();
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0)).isEqualTo(batch);
+            verify(repository).findAll(isA(Specification.class), eq(pageable));
+        }
 
-        Page<Batch> expectedPage = new PageImpl<>(List.of(testBatch));
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
+        @Test
+        @DisplayName("handles all null filters")
+        void handlesNullFilters() {
+            Pageable pageable = PageRequest.of(0, 10);
+            Page<Batch> expectedPage = new PageImpl<>(List.of());
+            when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(expectedPage);
 
-        // When
-        Page<Batch> result = batchService.search(
-                pid, state, substate, createdAfter, createdBefore,
-                updatedAfter, updatedBefore, priority, type, instanceId, pageable);
+            Page<Batch> result = service.search(
+                    null, null, null, null, null, null, null, null, null, null, pageable);
 
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0)).isEqualTo(testBatch);
+            assertThat(result).isNotNull();
+            verify(repository).findAll(isA(Specification.class), eq(pageable));
+        }
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Specification<Batch>> specCaptor = ArgumentCaptor
-                .forClass((Class<Specification<Batch>>) (Class<?>) Specification.class);
-        verify(batchRepository).findAll(specCaptor.capture(), eq(pageable));
-    }
+        @Test
+        @DisplayName("returns empty page when no results")
+        void returnsEmptyPage_whenNoResults() {
+            Pageable pageable = PageRequest.of(0, 10);
+            Page<Batch> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+            when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(emptyPage);
 
-    @Test
-    @DisplayName("Search with null parameters should handle gracefully")
-    void search_shouldHandleNullParameters() {
-        // Given
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Batch> expectedPage = new PageImpl<>(List.of(testBatch));
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
+            Page<Batch> result = service.search(
+                    "uuid:nonexistent", null, null, null, null, null, null, null, null, null, pageable);
 
-        // When
-        Page<Batch> result = batchService.search(
-                null, null, null, null, null, null, null, null, null, null, pageable);
+            assertThat(result.getContent()).isEmpty();
+            assertThat(result.getTotalElements()).isEqualTo(0);
+        }
 
-        // Then
-        assertThat(result).isNotNull();
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
-    }
+        @Test
+        @DisplayName("respects pageable size and number")
+        void respectsPagination() {
+            Pageable pageable = PageRequest.of(1, 5);
+            Page<Batch> expectedPage = new PageImpl<>(List.of(batch), pageable, 1);
+            when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(expectedPage);
 
-    @Test
-    @DisplayName("Search with only PID should filter by PID")
-    void search_shouldFilterByPidOnly() {
-        // Given
-        String pid = "uuid:12345";
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Batch> expectedPage = new PageImpl<>(List.of(testBatch));
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
+            Page<Batch> result = service.search(
+                    null, null, null, null, null, null, null, null, null, null, pageable);
 
-        // When
-        Page<Batch> result = batchService.search(
-                pid, null, null, null, null, null, null, null, null, null, pageable);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
-    }
-
-    @Test
-    @DisplayName("Search with pagination should respect page size")
-    void search_shouldRespectPagination() {
-        // Given
-        Pageable pageable = PageRequest.of(0, 5);
-        List<Batch> batches = List.of(testBatch);
-        Page<Batch> expectedPage = new PageImpl<>(batches, pageable, 1);
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
-
-        // When
-        Page<Batch> result = batchService.search(
-                null, null, null, null, null, null, null, null, null, null, pageable);
-
-        // Then
-        assertThat(result.getSize()).isEqualTo(5);
-        assertThat(result.getNumber()).isEqualTo(0);
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
-    }
-
-    @Test
-    @DisplayName("Search should return empty page when no results")
-    void search_shouldReturnEmptyPage_whenNoResults() {
-        // Given
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Batch> expectedPage = new PageImpl<>(List.of());
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
-
-        // When
-        Page<Batch> result = batchService.search(
-                "uuid:nonexistent", null, null, null, null, null, null, null, null, null, pageable);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).isEmpty();
-        assertThat(result.getTotalElements()).isEqualTo(0);
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
-    }
-
-    @Test
-    @DisplayName("Search with date range should filter correctly")
-    void search_shouldFilterByDateRange() {
-        // Given
-        LocalDateTime createdAfter = LocalDateTime.now().minusDays(7);
-        LocalDateTime createdBefore = LocalDateTime.now();
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Batch> expectedPage = new PageImpl<>(List.of(testBatch));
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
-
-        // When
-        Page<Batch> result = batchService.search(
-                null, null, null, createdAfter, createdBefore, null, null, null, null, null, pageable);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
-    }
-
-    @Test
-    @DisplayName("Search with multiple criteria should combine filters")
-    void search_shouldCombineMultipleFilters() {
-        // Given
-        String pid = "uuid:12345";
-        BatchState state = BatchState.RUNNING;
-        BatchPriority priority = BatchPriority.HIGH;
-        String instanceId = "dk";
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Batch> expectedPage = new PageImpl<>(List.of(testBatch));
-        when(batchRepository.findAll(ArgumentMatchers.<Specification<Batch>>any(), eq(pageable)))
-                .thenReturn(expectedPage);
-
-        // When
-        Page<Batch> result = batchService.search(
-                pid, state, null, null, null, null, null, priority, null, instanceId, pageable);
-
-        // Then
-        assertThat(result).isNotNull();
-        verify(batchRepository).findAll(
-                ArgumentMatchers.<Specification<Batch>>any(), eq(pageable));
+            assertThat(result.getSize()).isEqualTo(5);
+            assertThat(result.getNumber()).isEqualTo(1);
+        }
     }
 }

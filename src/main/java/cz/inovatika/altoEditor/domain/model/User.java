@@ -46,19 +46,19 @@ public class User {
      */
     @Column(name = "is_kramerius", nullable = false)
     @Builder.Default
-    private boolean isKramerius = false;
+    private boolean kramerius = false;
     
     /**
      * True if this user represents an ALTO OCR engine/generator.
      */
     @Column(name = "is_engine", nullable = false)
     @Builder.Default
-    private boolean isEngine = false;
+    private boolean engine = false;
 
     /**
      * True if this special user (Kramerius or engine) is enabled in configuration.
      */
     @Column(name = "is_enabled", nullable = false)
     @Builder.Default
-    private boolean isEnabled = true;
+    private boolean enabled = true;
 }

@@ -17,21 +17,6 @@ public interface DigitalObjectRepository
         JpaSpecificationExecutor<DigitalObject> {
 
     /**
-     * Counts total number of direct child pages and number of those with ALTO versions.
-     *
-     * @param uuid UUID of the digital object
-     */
-    @Query("""
-            SELECT 
-                COUNT(p) as totalPages,
-                COUNT(DISTINCT CASE WHEN av.id IS NOT NULL THEN p.uuid END) as pagesWithAlto
-            FROM DigitalObject p
-            LEFT JOIN AltoVersion av ON av.digitalObject.uuid = p.uuid
-            WHERE p.parent.uuid = :uuid AND p.model = 'page'
-            """)
-    PageCountStats getDirectPageStats(@Param("uuid") UUID uuid);
-
-    /**
      * Counts total number of descendant pages and number of those with ALTO versions.
      * Uses a recursive CTE for hierarchy traversal (no Java recursion, no DB columns).
      * Aliases match PageCountStats getters (getTotalPages, getPagesWithAlto).
@@ -39,13 +24,11 @@ public interface DigitalObjectRepository
      * @param uuid UUID of the digital object
      */
     @Query(value = """
-            WITH RECURSIVE descendants AS (
+            WITH RECURSIVE descendants (uuid, parent_uuid, model) AS (
                 SELECT uuid, parent_uuid, model
                 FROM object_hierarchy
                 WHERE uuid = :uuid
-
                 UNION ALL
-
                 SELECT oh.uuid, oh.parent_uuid, oh.model
                 FROM object_hierarchy oh
                 INNER JOIN descendants d ON oh.parent_uuid = d.uuid

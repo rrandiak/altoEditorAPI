@@ -75,7 +75,7 @@ public class AppInitializer {
                 userRepository.save(User.builder()
                         .uid("kramerius-" + name)
                         .username(name)
-                        .isKramerius(true)
+                        .kramerius(true)
                         .build());
             }
         });
@@ -103,7 +103,7 @@ public class AppInitializer {
                 userRepository.save(User.builder()
                         .uid("engine-" + name)
                         .username(name)
-                        .isEngine(true)
+                        .engine(true)
                         .build());
             }
         });

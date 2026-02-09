@@ -6,10 +6,13 @@ import org.springframework.stereotype.Component;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
+import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
+import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
+import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
@@ -40,6 +43,10 @@ public class AltoVersionFacade {
     private final AltoVersionMapper mapper;
 
     private final BatchMapper batchMapper;
+
+    private final ProcessDispatcher processDispatcher;
+
+    private final AltoOcrGeneratorProcessFactory altoOcrGeneratorProcessFactory;
 
     /** Search ALTO versions related to current user (or ACTIVE). */
     public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
@@ -87,7 +94,8 @@ public class AltoVersionFacade {
                 userContext.getUserId());
 
         if (digitalObjectWithContent == null) {
-            digitalObjectWithContent = service.createInitialVersion(pid, instanceId);
+            String instance = instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId();
+            digitalObjectWithContent = service.createInitialVersion(pid, instance);
         }
 
         return mapper.toDto(digitalObjectWithContent);
@@ -128,7 +136,11 @@ public class AltoVersionFacade {
 
     /** Start per-page ALTO generation batch (selected engine). */
     public BatchDto generateAlto(String pid, String engine, BatchPriority priority) {
-        return batchMapper.toDto(service.generateAlto(pid, engine, priority, userContext.getUserId()));
+        Batch batch = service.createGenerateAltoBatch(pid, engine, priority, userContext.getUserId());
+
+        processDispatcher.submit(altoOcrGeneratorProcessFactory.create(batch));
+
+        return batchMapper.toDto(batch);
     }
 
     /**

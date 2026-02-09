@@ -47,7 +47,7 @@ class BatchControllerTest extends ControllerTest {
                 .instance("inst1")
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
-                .objectId(100)
+                .altoVersionId(100L)
                 .estimatedItemCount(10)
                 .log("log")
                 .build();

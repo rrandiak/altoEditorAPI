@@ -25,12 +25,12 @@ public class AltoVersionControllerTest extends ControllerTest {
     @MockitoBean
     private AltoVersionFacade facade;
 
-    private final int TEST_OBJECT_ID = 1;
+    private static final int TEST_VERSION_ID = 1;
 
     @Test
     @WithMockUser(authorities = { "CURATOR" })
     void setObjectActive_shouldReturnOk_whenUserIsCurator() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_VERSION_ID + "/accept")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isOk());
@@ -39,7 +39,7 @@ public class AltoVersionControllerTest extends ControllerTest {
     @Test
     @WithMockUser(authorities = { "EDITOR" })
     void setObjectActive_shouldReturnForbidden_whenUserIsEditor() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_VERSION_ID + "/accept")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isForbidden());
@@ -48,7 +48,7 @@ public class AltoVersionControllerTest extends ControllerTest {
     @Test
     @WithMockUser(authorities = { "USER" })
     void setObjectActive_shouldReturnForbidden_whenUserHasNoProperAuthority() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_VERSION_ID + "/accept")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isForbidden());
@@ -56,7 +56,7 @@ public class AltoVersionControllerTest extends ControllerTest {
 
     @Test
     void setObjectActive_shouldReturnUnauthorized_whenNoUser() throws Exception {
-        mockMvc.perform(post("/api/alto-versions/" + TEST_OBJECT_ID + "/set-active")
+        mockMvc.perform(post("/api/alto-versions/" + TEST_VERSION_ID + "/accept")
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isForbidden());

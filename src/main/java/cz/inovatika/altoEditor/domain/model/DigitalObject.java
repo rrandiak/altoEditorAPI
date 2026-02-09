@@ -5,13 +5,14 @@ import java.util.List;
 import java.util.UUID;
 
 import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.RoutingBinderRef;
-import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.TypeBinderRef;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.TypeBinding;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.GenericField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexingDependency;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.ObjectPath;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.PropertyValue;
 
 import cz.inovatika.altoEditor.domain.enums.Model;
 import jakarta.persistence.CascadeType;
@@ -40,7 +41,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Indexed(routingBinder = @RoutingBinderRef(type = DigitalObjectRoutingBinder.class))
-@TypeBinding(binder = @TypeBinderRef(type = DigitalObjectCountsBinder.class))
 public class DigitalObject {
 
     @Id
@@ -68,12 +68,22 @@ public class DigitalObject {
     private String title;
 
     @Column(columnDefinition = "smallint")
-    @KeywordField(name = "level")
+    @GenericField(name = "level")
     private Integer level;
 
     @Column(columnDefinition = "smallint")
     @GenericField(name = "indexInParent")
     private Integer indexInParent;
+
+    /** Total descendant pages (excluding this node if it is a page). Persisted and updated on hierarchy/ALTO changes. */
+    @Column(name = "pages_count")
+    @GenericField(name = "pagesCount")
+    private Integer pagesCount;
+
+    /** Descendant pages that have at least one ALTO version. Persisted and updated on hierarchy/ALTO changes. */
+    @Column(name = "pages_with_alto")
+    @GenericField(name = "pagesWithAlto")
+    private Integer pagesWithAlto;
 
     @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "alto_version_id")
@@ -101,11 +111,13 @@ public class DigitalObject {
     }
 
     @KeywordField(name = "pid")
+    @IndexingDependency(derivedFrom = @ObjectPath(@PropertyValue(propertyName = "uuid")))
     public String getPid() {
         return "uuid:" + this.getUuid().toString();
     }
 
     @KeywordField(name = "parentPid")
+    @IndexingDependency(derivedFrom = @ObjectPath(@PropertyValue(propertyName = "parent")))
     public String getParentPid() {
         return this.parent != null ? this.parent.getPid() : null;
     }
@@ -119,6 +131,7 @@ public class DigitalObject {
     }
 
     @KeywordField(name = "rootPid")
+    @IndexingDependency(derivedFrom = @ObjectPath(@PropertyValue(propertyName = "parent")))
     public String getRootPid() {
         return this.getRoot().getPid();
     }

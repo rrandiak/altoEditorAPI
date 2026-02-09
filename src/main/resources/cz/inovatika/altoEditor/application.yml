@@ -2,15 +2,17 @@ application:
   jdbc:
     driver: "org.h2.Driver"
     url: "jdbc:h2:mem:altoEditorTestDb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
-    username: "sa"
-    password: ""
+    username: "altoEditor"
+    password: "replaceMe"
   store:
-    path: "/replace/with/temporary/directory/for/tests"
+    path: "/tmp/altoEditorTestStore"
     pattern: "xx/xx/xx"
   kramerius-instances:
-    test:
-      title: "Kramerius Test Instance"
-      url: "http://localhost:8080/"
+    k7-mzk:
+      title: "Kramerius 7 - MZK"
+      url: "https://api.kramerius.mzk.cz/"
+      serviceClientId: "replaceMe"
+      serviceSecret: "replaceMe"
   engines:
     pero:
       exec: "python"

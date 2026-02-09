@@ -13,6 +13,9 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Container build (used by -Pcontainer and exec:exec@build-container) -->
+        <container.cmd>docker</container.cmd>
+        <container.image.name>alto-editor</container.image.name>
     </properties>
 
     <parent>
@@ -64,34 +67,6 @@
                 </executions>
             </plugin>
 
-            <!-- <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
-                <configuration>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>assemble-all</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <configuration>
-                            <archive>
-                                <manifest>
-                                    <mainClass>cz.inovatika.altoEditor.server.Run</mainClass>
-                                </manifest>
-                            </archive>
-                            <finalName>altoEditor</finalName>
-                            <appendAssemblyId>false</appendAssemblyId>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin> -->
             <!-- JaCoCo code coverage plugin -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -117,6 +92,41 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Package the app locally, then build the container image (JAR from target/, not built in Docker). -->
+        <profile>
+            <id>container</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>build-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${container.cmd}</executable>
+                                    <arguments>
+                                        <argument>build</argument>
+                                        <argument>-f</argument>
+                                        <argument>Containerfile</argument>
+                                        <argument>-t</argument>
+                                        <argument>${container.image.name}:${project.version}</argument>
+                                        <argument>.</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <repositories>
         <repository>

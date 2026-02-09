@@ -1,6 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
@@ -27,7 +28,8 @@ public class KrameriusClientFactory {
                     "Kramerius instance with ID " + instanceId + " not found");
         }
 
-        return new K7Client(config.getKrameriusInstances().get(instanceId), restTemplateBuilder.build(),
+        return new K7Client(config.getKrameriusInstances().get(instanceId),
+                restTemplateBuilder.requestFactory(SimpleClientHttpRequestFactory.class).build(),
                 krameriusUserFactory);
     }
 }

@@ -25,6 +25,11 @@ spring:
       hibernate:
         format_sql: false
         use_sql_comments: false
+        search:
+          backend:
+            directory:
+              root: /tmp/hibernate-search-index
+
 logging:
   level:
     org.hibernate.SQL: off

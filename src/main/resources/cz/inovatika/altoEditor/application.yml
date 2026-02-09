@@ -1,34 +1,33 @@
 application:
-  jdbc:
-    driver: "org.h2.Driver"
-    url: "jdbc:h2:mem:altoEditorTestDb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
-    username: "altoEditor"
-    password: "replaceMe"
   store:
-    path: "/tmp/altoEditorTestStore"
+    path: "${ALTO_EDITOR_STORE_PATH:/tmp/altoEditorTestStore}"
     pattern: "xx/xx/xx"
   kramerius-instances:
     k7-mzk:
       title: "Kramerius 7 - MZK"
       url: "https://api.kramerius.mzk.cz/"
-      serviceClientId: "replaceMe"
-      serviceSecret: "replaceMe"
+      serviceClientId: "${ALTO_EDITOR_SERVICE_CLIENT_ID:replaceMe}"
+      serviceSecret: "${ALTO_EDITOR_SERVICE_SECRET:replaceMe}"
   engines:
-    pero:
+    pero-vut:
       exec: "python"
-      entry: "/usr/local/bin/pero.py"
+      entry: "/usr/local/bin/pero-vut.py"
 
 spring:
+  datasource:
+    driver-class-name: "${ALTO_EDITOR_JDBC_DRIVER:org.h2.Driver}"
+    url: "${ALTO_EDITOR_JDBC_URL:jdbc:h2:mem:altoEditorTestDb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}"
+    username: "${ALTO_EDITOR_JDBC_USERNAME:altoEditor}"
+    password: "${ALTO_EDITOR_JDBC_PASSWORD:replaceMe}"
   jpa:
     show-sql: false
     properties:
       hibernate:
         format_sql: false
-        use_sql_comments: false
         search:
           backend:
             directory:
-              root: /tmp/hibernate-search-index
+              root: ${ALTO_EDITOR_INDEX_DIRECTORY:/tmp/hibernate-search-index}
 
 logging:
   level:

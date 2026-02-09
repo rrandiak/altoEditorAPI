@@ -1,7 +1,6 @@
-# Expects target/AltoEditor-*.jar from local build. Run: mvn package  then  podman build -f Containerfile -t alto-editor:1.6.0 .
 FROM eclipse-temurin:21-jre-alpine
 
-# Install Python for Pero OCR engine script (symlink python -> python3 for engine entry "python")
+# Install Python for Pero VUT engine script
 RUN apk add --no-cache python3 py3-pip && ln -sf /usr/bin/python3 /usr/local/bin/python
 
 WORKDIR /opt/alto-editor
@@ -9,18 +8,21 @@ WORKDIR /opt/alto-editor
 # Copy pre-built JAR from host target/ (build with mvn package first)
 COPY target/AltoEditor-*.jar ./lib/altoEditor.jar
 
-# Python dependencies for pero-ocr.py (Pillow, requests, requests-toolbelt)
+# Python dependencies for pero-vut.py
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && rm /tmp/requirements.txt
 
-# Pero OCR script: application.yml expects entry e.g. /usr/local/bin/pero.py
-COPY src/main/resources/cz/inovatika/altoEditor/pero/pero-ocr.py /usr/local/bin/pero.py
+# Set environment variable for application home
+ENV altoeditor.home=/opt/alto-editor
 
-# Directories for app data
-RUN mkdir -p log /tmp/altoEditorStore /tmp/hibernate-search-index
+# Copy default application.yml (can be overridden by mounting a custom one)
+COPY src/main/resources/cz/inovatika/altoEditor/application.yml /opt/alto-editor/application.yml
+
+# Pero VUT script: application.yml expected entry /usr/local/bin/pero-vut.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-vut.py /usr/local/bin/pero-vut.py
 
 # Expose HTTP port (Spring Boot default 8080)
 EXPOSE 8080
 
-# Run the application (port 8080 is Spring Boot default; override with SERVER_PORT if needed)
+# Run the application
 CMD ["java", "-jar", "/opt/alto-editor/lib/altoEditor.jar"]

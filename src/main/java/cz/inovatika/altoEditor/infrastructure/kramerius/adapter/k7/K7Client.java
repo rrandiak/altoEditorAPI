@@ -17,6 +17,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.Datastream;
+import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusClient;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AccessToken;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AkubraOpResponse;
@@ -30,7 +31,9 @@ import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUserFactory;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.SolrResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.UploadAltoOcrResponse;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class K7Client implements KrameriusClient {
 
     private static final String METADATA_FL = "pid,model,title.search,level,own_parent.pid,rels_ext_index.sort";
@@ -59,6 +62,13 @@ public class K7Client implements KrameriusClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        return new HttpEntity<>(headers);
+    }
+
+    private HttpEntity<Void> createXmlAcceptRequestEntity(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setAccept(List.of(MediaType.APPLICATION_XML, MediaType.TEXT_XML, MediaType.ALL));
         return new HttpEntity<>(headers);
     }
 
@@ -217,7 +227,7 @@ public class K7Client implements KrameriusClient {
     public byte[] getImageBytes(String pid) {
         ResponseEntity<byte[]> response = exchangeWithServiceToken(
                 token -> restTemplate.exchange(
-                        this.config.buildEndpoint("/search/api/v7.0/item/" + pid + "/image"),
+                        this.config.buildEndpoint("/search/api/client/v7.0/items/" + pid + "/image"),
                         HttpMethod.GET,
                         createJsonRequestEntity(token),
                         byte[].class));
@@ -229,13 +239,18 @@ public class K7Client implements KrameriusClient {
     public byte[] getAltoBytes(String pid) {
         ResponseEntity<byte[]> response = exchangeWithServiceToken(
                 token -> restTemplate.exchange(
-                        this.config.buildEndpoint("/search/api/v7.0/item/" + pid + "/ocr/alto"),
+                        this.config.buildEndpoint("/search/api/client/v7.0/items/" + pid + "/ocr/alto"),
                         HttpMethod.GET,
-                        createJsonRequestEntity(token),
+                        createXmlAcceptRequestEntity(token),
                         byte[].class));
+        
+        if (response.getStatusCode() == HttpStatus.NOT_FOUND) {
+            throw new AltoVersionNotFoundException("Alto version for PID " + pid + " not found in Kramerius " + config.getTitle());
+        } else if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new RuntimeException("Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle());
+        }
 
-        return response.getBody();
-    }
+        return response.getBody();    }
 
     @Override
     public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] altoContent, byte[] ocrContent) {
@@ -252,28 +267,42 @@ public class K7Client implements KrameriusClient {
     }
 
     private void deleteDatastream(String pid, Datastream ds) {
-        ResponseEntity<K7AkubraOpResponse> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        this.config
-                                .buildEndpoint("/search/api/admin/v7.0/repository/deleteDatastream?dsId=$dsId&pid=$pid"
-                                        .replace("$dsId", ds.toString())
-                                        .replace("$pid", pid)),
-                        HttpMethod.DELETE,
-                        createJsonRequestEntity(token),
-                        K7AkubraOpResponse.class));
+        URI uri = UriComponentsBuilder
+                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/repository/deleteDatastream"))
+                .queryParam("dsId", ds)
+                .queryParam("pid", pid)
+                .build()
+                .encode()
+                .toUri();
 
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
-        }
+        try {
+            ResponseEntity<K7AkubraOpResponse> response = exchangeWithServiceToken(
+                    token -> restTemplate.exchange(
+                            uri,
+                            HttpMethod.DELETE,
+                            createJsonRequestEntity(token),
+                            K7AkubraOpResponse.class));
 
-        if (response.getBody() == null || response.getBody().getDsId() != ds) {
-            throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
+            }
+
+            if (response.getBody() == null || response.getBody().getDsId() != ds) {
+                throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
+            }
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.info("Datastream {} for PID {} was already absent in Kramerius {}", ds, pid, config.getTitle());
+                return;
+            }
+            throw e;
         }
     }
 
     private void uploadDatastream(String pid, Datastream ds, byte[] content) {
         URI uri = UriComponentsBuilder
-                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/repository/uploadDatastream"))
+                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/repository/createManagedDatastream"))
+                .queryParam("mimeType", ds.getMimeType())
                 .queryParam("dsId", ds)
                 .queryParam("pid", pid)
                 .build()

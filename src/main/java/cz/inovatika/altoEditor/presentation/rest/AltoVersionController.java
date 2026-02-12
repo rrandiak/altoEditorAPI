@@ -19,6 +19,7 @@ import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
 import cz.inovatika.altoEditor.presentation.facade.AltoVersionFacade;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.request.NewAltoVersionRequest;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -81,7 +82,7 @@ public class AltoVersionController {
      * default Kramerius instance will be used.
      * 
      * @param pid        The identifier of the ALTO version.
-     * @param instanceId The instance ID of the ALTO version (optional).
+     * @param instance The instance ID of the ALTO version (optional).
      * 
      * @return The ALTO content of the ALTO version.
      */
@@ -89,9 +90,9 @@ public class AltoVersionController {
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<AltoVersionDto> getRelatedAlto(
             @PathVariable String pid,
-            @RequestParam(required = false) String instanceId) {
+            @RequestParam(required = false) String instance) {
 
-        AltoVersionDto altoContent = facade.getRelatedAlto(pid, instanceId);
+        AltoVersionDto altoContent = facade.getRelatedAlto(pid, instance);
 
         return ResponseEntity.ok(altoContent);
     }
@@ -150,7 +151,7 @@ public class AltoVersionController {
      * Get image for an ALTO version.
      * 
      * @param pid        The identifier of the ALTO version.
-     * @param instanceId The instance ID of the ALTO version (optional).
+     * @param instance The instance ID of the ALTO version (optional).
      * 
      * @return The image bytes of the digital object.
      */
@@ -158,9 +159,9 @@ public class AltoVersionController {
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<byte[]> getImage(
             @PathVariable String pid,
-            @RequestParam(required = false) String instanceId) {
+            @RequestParam(required = false) String instance) {
 
-        byte[] imageData = facade.getImage(pid, instanceId);
+        byte[] imageData = facade.getImage(pid, instance);
 
         return ResponseEntity.ok(imageData);
     }
@@ -178,9 +179,9 @@ public class AltoVersionController {
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<AltoVersionDto> newAltoVersion(
             @PathVariable String pid,
-            @RequestBody byte[] altoContent) {
+            @RequestBody NewAltoVersionRequest request) {
 
-        AltoVersionDto result = facade.updateOrCreateVersion(pid, altoContent);
+        AltoVersionDto result = facade.updateOrCreateVersion(pid, request.getContent());
 
         return ResponseEntity.ok(result);
     }
@@ -199,9 +200,10 @@ public class AltoVersionController {
     public ResponseEntity<BatchDto> generateAlto(
             @PathVariable String pid,
             @PathVariable String engine,
+            @RequestParam(required = false) String instance,
             @RequestParam(required = false) BatchPriority priority) {
 
-        BatchDto result = facade.generateAlto(pid, engine, priority);
+        BatchDto result = facade.generateAlto(pid, engine, instance, priority);
 
         return ResponseEntity.ok(result);
     }

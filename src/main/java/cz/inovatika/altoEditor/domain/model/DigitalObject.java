@@ -30,6 +30,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Table(name = "object_hierarchy", indexes = {
@@ -37,6 +38,7 @@ import lombok.NoArgsConstructor;
         @Index(columnList = "parent_uuid")
 })
 @Data
+@ToString(exclude = { "children" })
 @Builder(builderClassName = "DigitalObjectBuilder", toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor

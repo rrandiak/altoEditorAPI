@@ -73,7 +73,7 @@ public class ObjectHierarchyFacade {
     /** Get object metadata from Kramerius (with children/pages counts). */
     public KrameriusDigitalObjectDto getObjectMetadata(String pid, String instance) {
         if (instance == null) {
-            instance = krameriusConfig.getDefaultInstanceId();
+            instance = krameriusConfig.getDefaultInstance();
         }
 
         return krameriusMapper.toDto(
@@ -84,7 +84,7 @@ public class ObjectHierarchyFacade {
 
     /** Get children metadata from Kramerius for the given PID. */
     public List<KrameriusDigitalObjectDto> getChildrenMetadata(String pid, String instance) {
-        String finalInstance = instance == null ? krameriusConfig.getDefaultInstanceId() : instance;
+        String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
 
         return krameriusService.getChildrenMetadata(pid, finalInstance).stream()
                 .map(metadata -> krameriusMapper.toDto(

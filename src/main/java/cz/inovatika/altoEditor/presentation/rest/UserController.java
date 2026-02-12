@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import cz.inovatika.altoEditor.presentation.dto.request.UserSearchRequest;
+import cz.inovatika.altoEditor.presentation.dto.response.CurrentUserDto;
 import cz.inovatika.altoEditor.presentation.dto.response.UserDto;
 import cz.inovatika.altoEditor.presentation.facade.UserFacade;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +51,7 @@ public class UserController {
      */
     @GetMapping("/me")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<UserDto> getCurrentUser() {
+    public ResponseEntity<CurrentUserDto> getCurrentUser() {
 
         return ResponseEntity.ok(facade.getCurrentUser());
     }
@@ -62,7 +63,7 @@ public class UserController {
      */
     @PostMapping("/me")
     @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
-    public ResponseEntity<UserDto> createCurrentUser() {
+    public ResponseEntity<CurrentUserDto> createCurrentUser() {
 
         return ResponseEntity.ok(facade.createCurrentUser());
     }

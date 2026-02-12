@@ -1,17 +1,20 @@
 package cz.inovatika.altoEditor.presentation.dto.response;
 
+import java.util.List;
+
+import cz.inovatika.altoEditor.domain.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Kramerius instance reference (name, enabled flag). */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class KrameriusInstanceDto {
+public class CurrentUserDto {
     
-    private String name;
-    private Boolean enabled;
+    private Long id;
+    private String username;
+    private List<Role> roles;
 }

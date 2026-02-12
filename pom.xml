@@ -168,6 +168,13 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- OpenAPI 3 / Swagger: JSON at /v3/api-docs, UI at /swagger-ui.html (2.8.x for Spring Boot 3.5+) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.8.15</version>
+        </dependency>
+
         <!-- Web security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

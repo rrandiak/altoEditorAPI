@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.facade.BatchFacade;
-import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import lombok.RequiredArgsConstructor;
 
 /**
- * REST API for batch jobs (ALTO generation, hierarchy retrieval, etc.).
- * Batches are created via hierarchy or ALTO-version endpoints; this API allows listing and filtering them.
+ * REST API for batch jobs (ALTO generation, hierarchy retrieval, reindex, etc.).
+ * Batches are created via hierarchy or ALTO-version endpoints or here (reindex); this API allows listing and filtering them.
  *
  * TODO: rename to JobController and all related classes to Job*
  */

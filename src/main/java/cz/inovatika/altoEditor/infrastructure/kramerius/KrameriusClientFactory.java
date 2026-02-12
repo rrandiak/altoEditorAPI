@@ -3,6 +3,9 @@ package cz.inovatika.altoEditor.infrastructure.kramerius;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.exception.KrameriusInstanceNotConfiguredException;
@@ -20,16 +23,22 @@ public class KrameriusClientFactory {
 
     private final KrameriusUserFactory krameriusUserFactory;
 
-    public KrameriusClient getClient(String instanceId) {
-        KrameriusProperties.KrameriusInstance instance = config.getKrameriusInstances().get(instanceId);
+    public KrameriusClient getClient(String instanceName) {
+        KrameriusProperties.KrameriusInstance instance = config.getKrameriusInstances().get(instanceName);
 
         if (instance == null) {
             throw new KrameriusInstanceNotConfiguredException(
-                    "Kramerius instance with ID " + instanceId + " not found");
+                    "Kramerius instance with ID " + instanceName + " not found");
         }
 
-        return new K7Client(config.getKrameriusInstances().get(instanceId),
-                restTemplateBuilder.requestFactory(SimpleClientHttpRequestFactory.class).build(),
-                krameriusUserFactory);
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofMillis(instance.getConnectTimeout()));
+        requestFactory.setReadTimeout(Duration.ofMillis(instance.getReadTimeout()));
+
+        RestTemplate restTemplate = restTemplateBuilder
+                .requestFactory(() -> requestFactory)
+                .build();
+
+        return new K7Client(instance, restTemplate, krameriusUserFactory);
     }
 }

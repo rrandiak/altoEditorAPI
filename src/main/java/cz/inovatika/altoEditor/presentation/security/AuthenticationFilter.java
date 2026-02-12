@@ -18,14 +18,18 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.ServletException;
 
 /**
- * Validates JWT from {@code Authorization: Bearer <token>}, resolves user via Kramerius,
- * loads local user ID if present, and sets {@link UserProfile} in the security context.
+ * Validates JWT from {@code Authorization: Bearer <token>}, resolves user via
+ * Kramerius,
+ * loads local user ID if present, and sets {@link UserProfile} in the security
+ * context.
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AuthenticationFilter extends OncePerRequestFilter {
 
     private final KrameriusService krameriusService;
@@ -44,11 +48,22 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
 
-            KrameriusUser user = krameriusService.getUser(token);
+            KrameriusUser user = null;
+            try {
+                user = krameriusService.getUser(token);
+            } catch (Exception e) {
+                log.error("Error getting user from Kramerius: {}", e.getMessage());
+                throw e;
+            }
+
+            Long userId = userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null);
+            if (userId == null) {
+                log.warn("User not found in database: {}", user.getUsername());
+            }
 
             UserProfile profile = new UserProfile(
                     token,
-                    userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null),
+                    userId,
                     user.getUid(),
                     user.getUsername(),
                     user.getRoles());

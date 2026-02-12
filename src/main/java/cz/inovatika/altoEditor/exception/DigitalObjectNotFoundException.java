@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(HttpStatus.NOT_FOUND)
-public class DigitalObjectNotFoundException extends RuntimeException {
+public class DigitalObjectNotFoundException extends AltoEditorException {
     public DigitalObjectNotFoundException(String message) {
         super(message);
     }

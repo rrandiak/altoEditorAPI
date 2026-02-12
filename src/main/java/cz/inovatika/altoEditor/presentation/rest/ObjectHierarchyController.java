@@ -52,16 +52,16 @@ public class ObjectHierarchyController {
      * Get digital object metadata from Kramerius by PID.
      *
      * @param pid        Page or object identifier (e.g. {@code uuid:...}).
-     * @param instanceId Optional Kramerius instance ID; default used if omitted.
+     * @param instance Optional Kramerius instance ID; default used if omitted.
      * @return Metadata DTO including children count and pages count from Kramerius.
      */
     @GetMapping("/{pid}/from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<KrameriusDigitalObjectDto> getByPid(
             @PathVariable String pid,
-            @RequestParam(required = false) String instanceId) {
+            @RequestParam(required = false) String instance) {
 
-        KrameriusDigitalObjectDto node = facade.getObjectMetadata(pid, instanceId);
+        KrameriusDigitalObjectDto node = facade.getObjectMetadata(pid, instance);
 
         return ResponseEntity.ok(node);
     }
@@ -70,16 +70,16 @@ public class ObjectHierarchyController {
      * Get children metadata from Kramerius for a given object PID.
      *
      * @param pid        Parent object identifier (e.g. {@code uuid:...}).
-     * @param instanceId Optional Kramerius instance ID; default used if omitted.
+     * @param instance Optional Kramerius instance ID; default used if omitted.
      * @return List of child object metadata DTOs.
      */
     @GetMapping("/{pid}/children-from-kramerius")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<List<KrameriusDigitalObjectDto>> getChildrenByPid(
             @PathVariable String pid,
-            @RequestParam(required = false) String instanceId) {
+            @RequestParam(required = false) String instance) {
 
-        List<KrameriusDigitalObjectDto> children = facade.getChildrenMetadata(pid, instanceId);
+        List<KrameriusDigitalObjectDto> children = facade.getChildrenMetadata(pid, instance);
 
         return ResponseEntity.ok(children);
     }

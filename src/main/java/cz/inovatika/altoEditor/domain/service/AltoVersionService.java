@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.domain.service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -20,14 +21,17 @@ import cz.inovatika.altoEditor.domain.enums.Datastream;
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
+import cz.inovatika.altoEditor.domain.model.User;
 import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
+import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
 import cz.inovatika.altoEditor.exception.AltoNotFoundException;
 import cz.inovatika.altoEditor.exception.AltoVersionAlreadyExistsException;
 import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
+import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
@@ -39,6 +43,8 @@ import lombok.RequiredArgsConstructor;
 public class AltoVersionService {
 
     private final AltoVersionRepository repository;
+
+    private final DigitalObjectRepository digitalObjectRepository;
 
     private final ObjectHierarchyService objectHierarchyService;
 
@@ -85,7 +91,7 @@ public class AltoVersionService {
                         bool.must(f.match().field("instance").matching(instance));
                     }
                     if (targetPid != null) {
-                        bool.must(f.match().field("pagePid").matching(targetPid));
+                        bool.must(f.match().field("pid").matching(targetPid));
                     }
                     if (hierarchyPid != null) {
                         bool.must(f.terms().field("ancestorPids").matchingAny(hierarchyPid));
@@ -109,7 +115,7 @@ public class AltoVersionService {
                     return bool;
                 });
 
-        return query.fetch(limit, offset);
+        return query.fetch(offset, limit);
     }
 
     @Transactional(readOnly = true)
@@ -131,41 +137,50 @@ public class AltoVersionService {
                 .map(id -> userService.getUserById(id).getUsername())
                 .collect(Collectors.toList()) : null;
 
+        boolean hasFilter = (users != null && !users.isEmpty())
+                || instance != null || targetPid != null || ancestorPid != null
+                || title != null || createdAfter != null || createdBefore != null
+                || (states != null && !states.isEmpty());
+
         var query = session.search(AltoVersion.class)
                 .where(f -> {
                     var bool = f.bool();
-                    if (users != null && !users.isEmpty()) {
-                        bool.must(f.terms().field("username").matchingAny(usernames));
-                    }
-                    if (instance != null) {
-                        bool.must(f.match().field("instance").matching(instance));
-                    }
-                    if (targetPid != null) {
-                        bool.must(f.match().field("pagePid").matching(targetPid));
-                    }
-                    if (ancestorPid != null) {
-                        bool.must(f.terms().field("ancestorPids").matchingAny(ancestorPid));
-                    }
-                    if (title != null) {
-                        // Match title in either pageTitle or ancestorTitles
-                        var titleOr = f.bool()
-                                .should(f.wildcard().field("pageTitle").matching("*" + title + "*"))
-                                .should(f.wildcard().field("ancestorTitles").matching("*" + title + "*"));
-                        bool.must(titleOr);
-                    }
-                    if (createdAfter != null) {
-                        bool.must(f.range().field("createdAt").atLeast(createdAfter));
-                    }
-                    if (createdBefore != null) {
-                        bool.must(f.range().field("createdAt").atMost(createdBefore));
-                    }
-                    if (states != null && !states.isEmpty()) {
-                        bool.must(f.terms().field("state").matchingAny(states));
+                    if (!hasFilter) {
+                        bool.must(f.matchAll());
+                    } else {
+                        if (users != null && !users.isEmpty()) {
+                            bool.must(f.terms().field("username").matchingAny(usernames));
+                        }
+                        if (instance != null) {
+                            bool.must(f.match().field("instance").matching(instance));
+                        }
+                        if (targetPid != null) {
+                            bool.must(f.match().field("pid").matching(targetPid));
+                        }
+                        if (ancestorPid != null) {
+                            bool.must(f.terms().field("ancestorPids").matchingAny(ancestorPid));
+                        }
+                        if (title != null) {
+                            // Match title in either pageTitle or ancestorTitles
+                            var titleOr = f.bool()
+                                    .should(f.wildcard().field("pageTitle").matching("*" + title + "*"))
+                                    .should(f.wildcard().field("ancestorTitles").matching("*" + title + "*"));
+                            bool.must(titleOr);
+                        }
+                        if (createdAfter != null) {
+                            bool.must(f.range().field("createdAt").atLeast(createdAfter));
+                        }
+                        if (createdBefore != null) {
+                            bool.must(f.range().field("createdAt").atMost(createdBefore));
+                        }
+                        if (states != null && !states.isEmpty()) {
+                            bool.must(f.terms().field("state").matchingAny(states));
+                        }
                     }
                     return bool;
                 });
 
-        return query.fetch(limit, offset);
+        return query.fetch(offset, limit);
     }
 
     @Transactional(readOnly = true)
@@ -295,6 +310,8 @@ public class AltoVersionService {
 
     private AltoVersion createNewAltoVersion(
             String pid, Long userId, byte[] altoContent, AltoVersionState state) {
+        User user = userService.getUserById(userId);
+
         Optional<AltoVersion> objOpt = repository
                 .findFirstByDigitalObjectUuidOrderByVersionDesc(PidAdapter.toUuid(pid));
 
@@ -308,10 +325,11 @@ public class AltoVersionService {
         akubraService.saveAltoContent(pid, newVersion, altoContent);
 
         return repository.save(AltoVersion.builder()
-                .user(obj.getUser())
+                .user(user)
                 .digitalObject(obj.getDigitalObject())
                 .version(newVersion)
                 .state(state)
+                .contentHash(altoXmlService.computeHash(altoContent))
                 .build());
     }
 
@@ -445,10 +463,9 @@ public class AltoVersionService {
         return krameriusService.getImageBytes(pid, instance);
     }
 
-    public Batch createGenerateAltoBatch(String pid, String engine, BatchPriority priority, Long userId) {
-        if (repository.existsByDigitalObjectUuid(PidAdapter.toUuid(pid))) {
-            throw new AltoVersionNotFoundException(
-                    "No digital object found for PID: " + pid + " and current user");
+    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId) {
+        if (!digitalObjectRepository.existsById(PidAdapter.toUuid(pid))) {
+            throw new DigitalObjectNotFoundException(PidAdapter.toUuid(pid));
         }
         if (!userRepository.existsEngineByUsername(engine)) {
             throw new IllegalArgumentException("Engine '" + engine + "' is not enabled");
@@ -459,6 +476,7 @@ public class AltoVersionService {
                 .pid(pid)
                 .priority(priority)
                 .engine(engine)
+                .instance(instance)
                 .createdBy(userService.getUserById(userId))
                 .build());
 
@@ -541,14 +559,13 @@ public class AltoVersionService {
         AltoVersion obj = repository.findById(objectId)
                 .orElseThrow(() -> new RuntimeException("Digital object not found with ID: " + objectId));
 
-        return new AltoVersionUploadContent(obj.getDigitalObject().getPid(),
-                akubraService.retrieveDsBinaryContent(
+
+        byte[] altoContent = akubraService.retrieveDsBinaryContent(
                         obj.getDigitalObject().getPid(),
                         Datastream.ALTO,
-                        obj.getVersion()),
-                akubraService.retrieveDsBinaryContent(
-                        obj.getDigitalObject().getPid(),
-                        Datastream.TEXT_OCR,
-                        obj.getVersion()));
+                        obj.getVersion());
+        byte[] ocrContent = altoXmlService.convertAltoToOcr(altoContent).getBytes(StandardCharsets.UTF_8);
+
+        return new AltoVersionUploadContent(obj.getDigitalObject().getPid(), altoContent, ocrContent);
     }
 }

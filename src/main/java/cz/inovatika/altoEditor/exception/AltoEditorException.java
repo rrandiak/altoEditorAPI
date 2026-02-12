@@ -4,11 +4,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-public class AkubraStorageException extends AltoEditorException {
-    public AkubraStorageException(String message, Throwable cause) {
+public class AltoEditorException extends RuntimeException {
+    public AltoEditorException(String message) {
+        super(message);
+    }
+    public AltoEditorException(String message, Throwable cause) {
         super(message, cause);
     }
-    public AkubraStorageException(Throwable cause) {
+    public AltoEditorException(Throwable cause) {
         super(cause);
     }
 }

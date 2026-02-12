@@ -25,6 +25,8 @@ public class BatchService {
 
     private final BatchRepository repository;
 
+    private final UserService userService;
+
     public Batch getById(Integer batchId) {
     return repository.findById(batchId)
         .orElseThrow(() -> new BatchNotFoundException(batchId));
@@ -81,7 +83,7 @@ public class BatchService {
             LocalDateTime updatedBefore,
             BatchPriority priority,
             BatchType type,
-            String instanceId,
+            String instance,
             Pageable pageable) {
         Specification<Batch> spec = Specification.allOf(
                 BatchSpecifications.hasPid(pid),
@@ -93,9 +95,19 @@ public class BatchService {
                 BatchSpecifications.updatedBefore(updatedBefore),
                 BatchSpecifications.hasPriority(priority),
                 BatchSpecifications.hasType(type),
-                BatchSpecifications.hasInstanceId(instanceId)
+                BatchSpecifications.hasInstance(instance)
         );
 
         return repository.findAll(spec, pageable);
+    }
+
+    public Batch createReindexBatch(BatchPriority priority, Long userId) {
+        Batch batch = repository.save(Batch.builder()
+                .type(BatchType.REINDEX)
+                .priority(priority)
+                .createdBy(userService.getUserById(userId))
+                .build());
+
+        return batch;
     }
 }

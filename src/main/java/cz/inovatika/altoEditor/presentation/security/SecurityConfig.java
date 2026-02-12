@@ -12,7 +12,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Security configuration: all endpoints require authentication.
- * JWT is validated by {@link AuthenticationFilter}; method-level rules use {@code @PreAuthorize}.
+ * JWT is validated by {@link AuthenticationFilter}; method-level rules use
+ * {@code @PreAuthorize}.
  * CSRF is disabled (stateless API).
  */
 @Configuration
@@ -28,6 +29,12 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

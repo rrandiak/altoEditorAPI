@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(HttpStatus.BAD_REQUEST)
-public class InvalidAltoXmlException extends RuntimeException {
+public class InvalidAltoXmlException extends AltoEditorException {
     public InvalidAltoXmlException(String message) {
         super(message);
     }

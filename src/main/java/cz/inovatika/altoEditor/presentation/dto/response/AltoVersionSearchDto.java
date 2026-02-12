@@ -17,7 +17,7 @@ public class AltoVersionSearchDto {
     private Long id;
     private String pid;
     private Integer version;
-    private String instance;
+    private List<String> presentInInstances;
     private String username;
     private AltoVersionState state;
     private LocalDateTime createdAt;

@@ -192,5 +192,4 @@ public class ObjectHierarchyService {
 
         return batch;
     }
-
 }

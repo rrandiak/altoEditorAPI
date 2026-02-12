@@ -11,7 +11,7 @@ import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
 import lombok.RequiredArgsConstructor;
 
-/** Facade for batch job search (list/filter batches). */
+/** Facade for batch job search and creation (list/filter batches, create reindex batch). */
 @Component
 @RequiredArgsConstructor
 public class BatchFacade {

@@ -49,7 +49,7 @@ public class BatchSpecifications {
         return (root, query, cb) -> type == null ? null : cb.equal(root.get("type"), type);
     }
 
-    public static Specification<Batch> hasInstanceId(String instanceId) {
-        return (root, query, cb) -> instanceId == null ? null : cb.equal(root.get("instanceId"), instanceId);
+    public static Specification<Batch> hasInstance(String instance) {
+        return (root, query, cb) -> instance == null ? null : cb.equal(root.get("instance"), instance);
     }
 }

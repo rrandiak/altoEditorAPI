@@ -1,7 +1,5 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model;
 
-import java.time.OffsetDateTime;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.Data;
@@ -16,7 +14,8 @@ public class K7PlanProcessResponse {
 
     private String state;
 
-    private OffsetDateTime planned;
+    // Kramerius returns timestamp of wrong format
+    private String planned;
 
     private String uuid;
 }

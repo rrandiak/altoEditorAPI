@@ -1,6 +1,8 @@
 package cz.inovatika.altoEditor.presentation.dto.response;
 
+import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,12 +20,14 @@ public class AltoVersionDto {
 
     private String pid;
     private Integer version;
+    private String username;
 
-    private String state;
+    private AltoVersionState state;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    private String title;
+    private String pageTitle;
+    private List<String> ancestorTitles;
 
     private byte[] content;
 }

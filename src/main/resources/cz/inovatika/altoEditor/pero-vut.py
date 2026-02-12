@@ -3,11 +3,11 @@ import json
 import os
 import posixpath
 import sys
-import time
 import tempfile
-from PIL import Image
+import time
 
 import requests
+from PIL import Image
 from requests_toolbelt import MultipartEncoder
 
 SERVER_URL = "https://pero-ocr.fit.vutbr.cz/api/"
@@ -18,11 +18,35 @@ def main():
     if not os.path.isdir(pero_temp_path):
         os.makedirs(pero_temp_path, mode=0o777)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--image_path", help="Input image path.", required=True)
-    parser.add_argument("-oO", "--output_txt", help="Output path for txt. ", required=True)
-    parser.add_argument("-oA", "--output_alto", help="Output path for alto.", required=True)
-    parser.add_argument("-key", "--api_key", help="Api Key for your Organization", required=True)
+    parser.add_argument(
+        "-i", "--image_path", help="Input image path.", required=True
+    )
+    parser.add_argument(
+        "-oO", "--output_txt", help="Output path for txt. ", required=True
+    )
+    parser.add_argument(
+        "-oA", "--output_alto", help="Output path for alto.", required=True
+    )
+    parser.add_argument(
+        "-key",
+        "--api_key",
+        help="Api Key for your Organization",
+        required=True,
+    )
     args = parser.parse_args()
+
+    if not args.image_path:
+        sys.stderr.write("Error: Image path is required.")
+        exit(-1)
+    if not args.output_txt:
+        sys.stderr.write("Error: Output txt path is required.")
+        exit(-1)
+    if not args.output_alto:
+        sys.stderr.write("Error: Output alto path is required.")
+        exit(-1)
+    if not args.api_key:
+        sys.stderr.write("Error: API key is required.")
+        exit(-1)
 
     if os.path.exists(args.output_txt) and os.path.exists(args.output_alto):
         exit(0)
@@ -31,8 +55,16 @@ def main():
     image_path = args.image_path
     file_extension = os.path.basename(args.image_path).split(".")[1]
     if file_extension == "tif" or file_extension == "tiff":
-        if os.path.exists(os.path.join(os.path.dirname(args.image_path), os.path.basename(args.image_path).split(".")[0] + ".jpg")):
-            image_path = os.path.join(os.path.dirname(args.image_path), os.path.basename(args.image_path).split(".")[0] + ".jpg")
+        if os.path.exists(
+            os.path.join(
+                os.path.dirname(args.image_path),
+                os.path.basename(args.image_path).split(".")[0] + ".jpg",
+            )
+        ):
+            image_path = os.path.join(
+                os.path.dirname(args.image_path),
+                os.path.basename(args.image_path).split(".")[0] + ".jpg",
+            )
             file_name = os.path.basename(args.image_path).split(".")[0]
             is_converted = False
         else:
@@ -51,7 +83,14 @@ def main():
     request_id = post_processing_request(session, data, args.api_key)
 
     try:
-        upload_image(session, request_id, file_name, image_path, content_type, args.api_key)
+        upload_image(
+            session,
+            request_id,
+            file_name,
+            image_path,
+            content_type,
+            args.api_key,
+        )
     except FileNotFoundError as err:
         sys.stderr.write(f"Error: {err}")
         exit(-1)
@@ -64,9 +103,23 @@ def main():
 
     processing_result = ""
     while processing_result != "PROCESSED":
-        processing_result = download_results(session, args.output_txt, request_id, file_name, txt_format, args.api_key)
+        processing_result = download_results(
+            session,
+            args.output_txt,
+            request_id,
+            file_name,
+            txt_format,
+            args.api_key,
+        )
         if processing_result == "PROCESSED":
-            download_results(session, args.output_alto, request_id, file_name, alto_format, args.api_key)
+            download_results(
+                session,
+                args.output_alto,
+                request_id,
+                file_name,
+                alto_format,
+                args.api_key,
+            )
         else:
             time.sleep(5)
 
@@ -74,7 +127,7 @@ def main():
         os.remove(image_path)
     if os.path.isdir(pero_temp_path):
         os.rmdir(pero_temp_path)
-    #sys.stdout.write("Script finished successfully.")
+    # sys.stdout.write("Script finished successfully.")
     exit(0)
 
 
@@ -87,35 +140,49 @@ def create_json(file_name):
 
 def post_processing_request(session, data, apiKey):
     url = posixpath.join(SERVER_URL, "post_processing_request")
-    json_header={"api-key": apiKey, "Content-Type": "application/json"}
+    json_header = {"api-key": apiKey, "Content-Type": "application/json"}
     response = session.post(url, data=data, headers=json_header)
     if response.status_code < 400:
         response_dict = response.json()
-        while response_dict.get('status') != "success":
+        while response_dict.get("status") != "success":
             time.sleep(15)
-        request_id = response_dict.get('request_id')
+        request_id = response_dict.get("request_id")
         return request_id
     else:
-        sys.stderr.write(f"The post processing request ended with status code {response.status_code}.")
+        sys.stderr.write(
+            "The post processing request ended "
+            f"with status code {response.status_code}."
+        )
         exit(-1)
 
 
-def upload_image(session, request_id, file_name, image_path, content_type, apiKey):
-    #url = os.path.join(SERVER_URL, "upload_image", request_id, file_name)
+def upload_image(
+    session, request_id, file_name, image_path, content_type, apiKey
+):
+    # url = os.path.join(SERVER_URL, "upload_image", request_id, file_name)
     url = posixpath.join(SERVER_URL, "upload_image", request_id, file_name)
-    m = MultipartEncoder(fields={'file': (image_path, open(image_path, 'rb'), content_type)})
-    json_header={"api-key": apiKey, "Content-Type": m.content_type}
+    m = MultipartEncoder(
+        fields={"file": (image_path, open(image_path, "rb"), content_type)}
+    )
+    json_header = {"api-key": apiKey, "Content-Type": m.content_type}
     response = session.post(url, data=m, headers=json_header)
     if response.status_code >= 400:
-        sys.stderr.write(f"The image upload of {file_name} ended with status code {response.status_code}.")
+        sys.stderr.write(
+            f"The image upload of {file_name} "
+            f"ended with status code {response.status_code}."
+        )
         exit(-1)
     else:
         pass
 
 
-def download_results(session, output_dir, request_id, file_name, result_format, apiKey):
-    url = posixpath.join(SERVER_URL, "download_results", request_id, file_name, result_format)
-    json_header={"api-key": apiKey, "Content-Type": "application/json"}
+def download_results(
+    session, output_dir, request_id, file_name, result_format, apiKey
+):
+    url = posixpath.join(
+        SERVER_URL, "download_results", request_id, file_name, result_format
+    )
+    json_header = {"api-key": apiKey, "Content-Type": "application/json"}
     response = session.get(url, headers=json_header)
     if response.status_code == 200:
         with open(output_dir, "w", encoding="utf-8") as f:
@@ -124,8 +191,10 @@ def download_results(session, output_dir, request_id, file_name, result_format, 
         return "PROCESSED"
     elif response.status_code >= 400:
         msg: str = response.json()["message"]
-        sys.stderr.write(f"The request returned status code {response.status_code}."
-                         f"The message is: {msg}")
+        sys.stderr.write(
+            f"The request returned status code {response.status_code}."
+            f"The message is: {msg}"
+        )
         if "not processed yet" in response.json()["message"]:
             return "UNPROCESSED"
         exit(-1)
@@ -144,7 +213,9 @@ def get_content_type(file_extension):
     elif file_extension in jp2:
         return "image/jp2"
     else:
-        sys.stderr.write(f"Error: the extension {file_extension} is not supported.")
+        sys.stderr.write(
+            f"Error: the extension {file_extension} is not supported."
+        )
         exit(-1)
 
 

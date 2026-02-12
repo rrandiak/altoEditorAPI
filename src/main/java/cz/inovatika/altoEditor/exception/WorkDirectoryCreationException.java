@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-public class WorkDirectoryCreationException extends RuntimeException {
+public class WorkDirectoryCreationException extends AltoEditorException {
     public WorkDirectoryCreationException(String message, Throwable cause) {
         super(message, cause);
     }

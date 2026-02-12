@@ -13,7 +13,9 @@ import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
 public interface AltoVersionMapper {
     
     @Mapping(target = "pid", expression = "java(digitalObject.getPid())")
-    @Mapping(target = "title", source = "pageTitle")
+    @Mapping(target = "username", expression = "java(digitalObject.getUsername())")
+    @Mapping(target = "pageTitle", expression = "java(digitalObject.getPageTitle())")
+    @Mapping(target = "ancestorTitles", expression = "java(digitalObject.getAncestorTitles())")
     @Mapping(target = "content", ignore = true)
     AltoVersionDto toDto(AltoVersion digitalObject);
 

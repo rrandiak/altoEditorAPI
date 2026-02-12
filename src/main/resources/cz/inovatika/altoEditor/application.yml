@@ -20,6 +20,8 @@ spring:
     username: "${ALTO_EDITOR_JDBC_USERNAME:altoEditor}"
     password: "${ALTO_EDITOR_JDBC_PASSWORD:replaceMe}"
   jpa:
+    hibernate:
+      ddl-auto: "${ALTO_EDITOR_DDL_AUTO:update}"
     show-sql: false
     properties:
       hibernate:

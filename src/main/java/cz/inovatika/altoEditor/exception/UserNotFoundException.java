@@ -4,8 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(HttpStatus.NOT_FOUND)
-public class AltoVersionNotFoundException extends AltoEditorException {
-    public AltoVersionNotFoundException(String message) {
-        super(message);
+public class UserNotFoundException extends AltoEditorException {
+    public UserNotFoundException(String username) {
+        super("User " + username + " not found");
     }
 }

@@ -51,15 +51,15 @@ class AltoVersionRepositoryTest {
     private static final int VERSION_2 = 2;
     private static final String CONTENT_HASH = "a1b2c3d4e5f6";
 
-    private AltoVersion createAltoVersion(String pid, User user, String instanceId,
+    private AltoVersion createAltoVersion(String pid, User user, String instance,
             AltoVersionState state, int version) {
-        return createAltoVersion(pid, user, instanceId, state, version, CONTENT_HASH);
+        return createAltoVersion(pid, user, instance, state, version, CONTENT_HASH);
     }
 
-    private AltoVersion createAltoVersion(String pid, User user, String instanceId,
+    private AltoVersion createAltoVersion(String pid, User user, String instance,
             AltoVersionState state, int version, String contentHash) {
         DigitalObject dobj = digitalObjectRepository.save(DigitalObject.builder().pid(pid).build());
-        Set<String> instances = new HashSet<>(instanceId != null ? Set.of(instanceId) : Set.of());
+        Set<String> instances = new HashSet<>(instance != null ? Set.of(instance) : Set.of());
         return AltoVersion.builder()
                 .digitalObject(dobj)
                 .user(user)

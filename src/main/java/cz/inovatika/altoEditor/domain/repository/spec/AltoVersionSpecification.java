@@ -12,8 +12,8 @@ public class AltoVersionSpecification {
         return (root, query, cb) -> userId == null ? null : cb.equal(root.get("user_id"), userId);
     }
 
-    public static Specification<AltoVersion> hasInstance(String instanceId) {
-        return (root, query, cb) -> instanceId == null ? null : cb.equal(cb.upper(root.get("instance_id")), instanceId.toUpperCase());
+    public static Specification<AltoVersion> hasInstance(String instance) {
+        return (root, query, cb) -> instance == null ? null : cb.equal(cb.upper(root.get("instance")), instance.toUpperCase());
     }
 
     public static Specification<AltoVersion> hasPid(String pid) {

@@ -1,7 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model;
 
 
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,9 +23,9 @@ public class K7ProcessBatch {
         private String id;
         private String state;
 
-        private OffsetDateTime started;
-        private OffsetDateTime finished;
-        private OffsetDateTime planned;
+        private LocalDateTime started;
+        private LocalDateTime finished;
+        private LocalDateTime planned;
 
         private String uuid;
     }
@@ -42,9 +42,9 @@ public class K7ProcessBatch {
         private String id;
         private String state;
 
-        private OffsetDateTime started;
-        private OffsetDateTime finished;
-        private OffsetDateTime planned;
+        private LocalDateTime started;
+        private LocalDateTime finished;
+        private LocalDateTime planned;
 
         private String token;
     }

@@ -61,7 +61,7 @@ public class AltoVersionFacade {
                 request.getStates(),
                 request.getOffset(),
                 request.getLimit());
-        
+
         return SearchResultsDto.<AltoVersionSearchDto>builder()
                 .items(results.hits().stream().map(mapper::toSearchDto).toList())
                 .total(results.total().hitCount())
@@ -89,13 +89,13 @@ public class AltoVersionFacade {
     }
 
     /** Get ALTO for current user; if none, create from Kramerius and return. */
-    public AltoVersionDto getRelatedAlto(String pid, String instanceId) {
+    public AltoVersionDto getRelatedAlto(String pid, String instance) {
         AltoVersionWithContent digitalObjectWithContent = service.findRelatedAlto(pid,
                 userContext.getUserId());
 
         if (digitalObjectWithContent == null) {
-            String instance = instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId();
-            digitalObjectWithContent = service.createInitialVersion(pid, instance);
+            String instanceToUse = instance != null ? instance : krameriusConfig.getDefaultInstance();
+            digitalObjectWithContent = service.createInitialVersion(pid, instanceToUse);
         }
 
         return mapper.toDto(digitalObjectWithContent);
@@ -128,15 +128,15 @@ public class AltoVersionFacade {
         return service.getOcr(objectId);
     }
 
-    public byte[] getImage(String pid, String instanceId) {
+    public byte[] getImage(String pid, String instance) {
         return service.getKrameriusObjectImage(
                 pid,
-                instanceId != null ? instanceId : krameriusConfig.getDefaultInstanceId());
+                instance != null ? instance : krameriusConfig.getDefaultInstance());
     }
 
     /** Start per-page ALTO generation batch (selected engine). */
-    public BatchDto generateAlto(String pid, String engine, BatchPriority priority) {
-        Batch batch = service.createGenerateAltoBatch(pid, engine, priority, userContext.getUserId());
+    public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
+        Batch batch = service.createGenerateAltoBatch(pid, engine, instance == null ? krameriusConfig.getDefaultInstance() : instance, priority, userContext.getUserId());
 
         processDispatcher.submit(altoOcrGeneratorProcessFactory.create(batch));
 

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import cz.inovatika.altoEditor.domain.enums.Role;
 import cz.inovatika.altoEditor.exception.UnauthorizedUserException;
+import cz.inovatika.altoEditor.exception.UserNotFoundException;
 
 /**
  * Access to the current request's authenticated user (principal is {@link UserProfile}).
@@ -33,7 +34,7 @@ public class UserContextService {
     /** Local DB user ID; throws if user not yet synced (e.g. call {@code POST /api/users/me} first). */
     public Long getUserId() {
         if (getCurrentUser().getUserId() == null) {
-            throw new RuntimeException("User ID is not available");
+            throw new UserNotFoundException(getCurrentUser().getUsername());
         }
         return getCurrentUser().getUserId();
     }

@@ -28,12 +28,14 @@ import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.model.User;
 import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
+import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
 import cz.inovatika.altoEditor.domain.repository.UserRepository;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
 import cz.inovatika.altoEditor.exception.AltoNotFoundException;
 import cz.inovatika.altoEditor.exception.AltoVersionAlreadyExistsException;
 import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
+import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
@@ -48,6 +50,8 @@ class AltoVersionServiceTest {
 
     @Mock
     private AltoVersionRepository repository;
+    @Mock
+    private DigitalObjectRepository digitalObjectRepository;
     @Mock
     private ObjectHierarchyService objectHierarchyService;
     @Mock
@@ -73,7 +77,8 @@ class AltoVersionServiceTest {
     private static final User USER = User.builder().id(USER_ID).username("editor").build();
     private static final int VERSION = 1;
     private static final byte[] ALTO_CONTENT = "alto-content".getBytes();
-    private static final byte[] OCR_CONTENT = "ocr text".getBytes();
+    private static final String OCR_TEXT = "ocr text";
+    private static final byte[] OCR_CONTENT = OCR_TEXT.getBytes();
 
     @BeforeEach
     void setUp() {
@@ -332,14 +337,14 @@ class AltoVersionServiceTest {
         @Test
         @DisplayName("creates batch and submits process when no version exists and engine enabled")
         void createsBatchAndSubmits_whenValid() {
-            when(repository.existsByDigitalObjectUuid(any())).thenReturn(false);
+            when(digitalObjectRepository.existsById(any())).thenReturn(true);
             when(userRepository.existsEngineByUsername("tesseract")).thenReturn(true);
             when(userService.getUserById(USER_ID)).thenReturn(USER);
             Batch batch = Batch.builder().id(1).type(BatchType.GENERATE_SINGLE).pid(PID).engine("tesseract")
                     .createdBy(USER).build();
             when(batchRepository.save(any(Batch.class))).thenReturn(batch);
 
-            Batch result = service.createGenerateAltoBatch(PID, "tesseract", BatchPriority.MEDIUM, USER_ID);
+            Batch result = service.createGenerateAltoBatch(PID, "tesseract", "dk", BatchPriority.MEDIUM, USER_ID);
 
             assertThat(result).isNotNull();
             assertThat(result.getPid()).isEqualTo(PID);
@@ -347,22 +352,22 @@ class AltoVersionServiceTest {
         }
 
         @Test
-        @DisplayName("throws AltoVersionNotFoundException when version already exists for PID")
-        void throws_whenVersionExists() {
-            when(repository.existsByDigitalObjectUuid(any())).thenReturn(true);
+        @DisplayName("throws DigitalObjectNotFoundException when digital object not found for PID")
+        void throws_whenDigitalObjectNotFound() {
+            when(digitalObjectRepository.existsById(any())).thenReturn(false);
 
-            assertThrows(AltoVersionNotFoundException.class,
-                    () -> service.createGenerateAltoBatch(PID, "tesseract", BatchPriority.MEDIUM, USER_ID));
+            assertThrows(DigitalObjectNotFoundException.class,
+                    () -> service.createGenerateAltoBatch(PID, "tesseract", "dk", BatchPriority.MEDIUM, USER_ID));
         }
 
         @Test
         @DisplayName("throws IllegalArgumentException when engine not enabled")
         void throws_whenEngineNotEnabled() {
-            when(repository.existsByDigitalObjectUuid(any())).thenReturn(false);
+            when(digitalObjectRepository.existsById(any())).thenReturn(true);
             when(userRepository.existsEngineByUsername("unknown")).thenReturn(false);
 
             assertThrows(IllegalArgumentException.class,
-                    () -> service.createGenerateAltoBatch(PID, "unknown", BatchPriority.MEDIUM, USER_ID));
+                    () -> service.createGenerateAltoBatch(PID, "unknown", "dk", BatchPriority.MEDIUM, USER_ID));
         }
     }
 
@@ -468,6 +473,7 @@ class AltoVersionServiceTest {
                     .thenReturn(ALTO_CONTENT);
             when(akubraService.retrieveDsBinaryContent(eq(PID), eq(Datastream.TEXT_OCR), eq(VERSION)))
                     .thenReturn(OCR_CONTENT);
+            when(altoXmlService.convertAltoToOcr(ALTO_CONTENT)).thenReturn(OCR_TEXT);
 
             AltoVersionUploadContent result = service.getAltoVersionUploadContent(versionId);
 

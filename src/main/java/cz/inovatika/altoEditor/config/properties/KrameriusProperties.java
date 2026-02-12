@@ -51,7 +51,7 @@ public class KrameriusProperties {
         }
     }
 
-    public String getDefaultInstanceId() {
+    public String getDefaultInstance() {
         return krameriusInstances.keySet().stream().findFirst()
                 .orElseThrow(() -> new RuntimeException("No Kramerius instance configured"));
     }

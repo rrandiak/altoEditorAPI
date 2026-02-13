@@ -4,6 +4,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
+import cz.inovatika.altoEditor.infrastructure.process.templates.ExternalProcess;
 import cz.inovatika.altoEditor.infrastructure.storage.WorkDirectoryService;
 
 public class AltoOcrGeneratorProcess extends BatchProcess {
@@ -72,6 +74,32 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
         };
     }
 
+    private ExternalProcess createSingleExternalProcess(File workDir, String pid) {
+        return new GenerateSingleExternalProcess(engineConfig,
+                new File(workDir, pid + ".jpg"),
+                new File(workDir, pid + ".xml"),
+                new File(workDir, pid + ".txt"));
+    }
+
+    private ExternalProcess createBatchExternalProcess(File workDir, List<String> pids) {
+        return new GenerateBatchExternalProcess(engineConfig,
+                new File(workDir, "dataTriplets.txt"),
+                pids.stream().map(pid -> new GenerateBatchExternalProcess.DataTriplet(
+                        new File(workDir, pid + ".jpg"),
+                        new File(workDir, pid + ".xml"),
+                        new File(workDir, pid + ".txt"))).collect(Collectors.toList()));
+    }
+
+    private void runExternalProcess(Batch batch, ExternalProcess externalProcess) {
+        externalProcess.run();
+        if (!externalProcess.isOk()) {
+            batchService.setFailed(batch,
+                    "Generating ALTO and OCR for PID " + batch.getPid() + " failed: "
+                            + externalProcess.getErr());
+            return;
+        }
+    }
+
     @Override
     public void run() {
         Batch batch = batchService.getById(batchId);
@@ -108,23 +136,18 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                 // and save the results to workDir
                 batchService.setSubstate(batch, BatchSubstate.GENERATING);
 
-                for (String pid : pidChunk) {
-                    AltoOcrExternalProcess externalProcess = new AltoOcrExternalProcess(engineConfig,
-                            new File(workDir, pid + ".jpg"),
-                            new File(workDir, pid + ".xml"),
-                            new File(workDir, pid + ".txt"));
-
-                    externalProcess.run();
-                    if (!externalProcess.isOk()) {
-                        batchService.setFailed(batch,
-                                "Generating ALTO and OCR for PID " + batch.getPid() + " failed: "
-                                        + externalProcess.getErr());
-                        return;
+                if (engineConfig.isBatchMode()) {
+                    runExternalProcess(batch, createBatchExternalProcess(workDir, pidChunk));
+                } else {
+                    for (String pid : pidChunk) {
+                        runExternalProcess(batch, createSingleExternalProcess(workDir, pid));
                     }
                 }
 
                 // --- SAVE RESULTS ---
                 // Save generated ALTO (and OCR ?) back to Akubra
+                // NOTE: This implementation does not save OCR results, only ALTO.
+                // It is expected that OCR can be extracted from ALTO when needed.
                 batchService.setSubstate(batch, BatchSubstate.SAVING);
 
                 for (String pid : pidChunk) {

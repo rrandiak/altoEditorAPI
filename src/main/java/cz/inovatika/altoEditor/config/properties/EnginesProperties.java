@@ -8,11 +8,13 @@ import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "application")
 public class EnginesProperties {
 
@@ -26,20 +28,40 @@ public class EnginesProperties {
         @NotBlank
         private String entry;
 
-        @NotBlank
         private String inImageArg = "-i";
-        @NotBlank
         private String outAltoArg = "-oA";
-        @NotBlank
         private String outOcrArg = "-oO";
+        private Boolean batchMode = false;
+        private String dataTripletsArg = "-t";
 
         private List<String> additionalArgs = new ArrayList<>();
+
+        /**
+         * When batchMode is false: inImageArg, outAltoArg and outOcrArg must be set.
+         * When batchMode is true: dataTripletsArg must be set.
+         */
+        @AssertTrue(message = """
+                When batchMode is false, inImageArg, outAltoArg and outOcrArg must be set;
+                when batchMode is true, dataTripletsArg must be set
+                """)
+        public boolean isValidEngineArgs() {
+            if (Boolean.TRUE.equals(batchMode)) {
+                return dataTripletsArg != null && !dataTripletsArg.isBlank();
+            }
+            return inImageArg != null && !inImageArg.isBlank()
+                    && outAltoArg != null && !outAltoArg.isBlank()
+                    && outOcrArg != null && !outOcrArg.isBlank();
+        }
+
+        @NotNull
+        private Integer batchSize = 100;
 
         @NotNull
         private Long timeout = 180_000L;
 
-        @NotNull
-        private Integer batchSize = 100;
+        public boolean isBatchMode() {
+            return Boolean.TRUE.equals(batchMode);
+        }
     }
 
     public EngineConfig getEngineConfig(String engine) {

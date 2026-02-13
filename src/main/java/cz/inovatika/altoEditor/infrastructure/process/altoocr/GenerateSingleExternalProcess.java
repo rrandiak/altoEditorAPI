@@ -9,43 +9,30 @@ import cz.inovatika.altoEditor.infrastructure.process.templates.ExternalProcess;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
-public class AltoOcrExternalProcess extends ExternalProcess {
+public class GenerateSingleExternalProcess extends ExternalProcess {
 
-    private final EnginesProperties.EngineConfig onfig;
+    private final EnginesProperties.EngineConfig config;
     private final File inImageFile;
     private final File outAltoFile;
     private final File outOcrFile;
 
     @Override
-    public void run() {
-        if (!inImageFile.exists()) {
-            throw new IllegalStateException(inImageFile.getAbsolutePath() + " not exists!");
-        }
-        if (outAltoFile.exists()) {
-            throw new IllegalStateException(outAltoFile.getAbsolutePath() + " exists!");
-        }
-        if (outOcrFile.exists()) {
-            throw new IllegalStateException(outOcrFile.getAbsolutePath() + " exists!");
-        }
-        super.run();
-    }
-
-    @Override
     protected List<String> buildCmdLine() {
         List<String> cmdLine = new ArrayList<>();
-        cmdLine.add(onfig.getExec());
-        cmdLine.add(onfig.getEntry());
 
-        cmdLine.add(onfig.getInImageArg());
+        cmdLine.add(config.getExec());
+        cmdLine.add(config.getEntry());
+
+        cmdLine.add(config.getInImageArg());
         cmdLine.add(inImageFile.getAbsolutePath());
 
-        cmdLine.add(onfig.getOutAltoArg());
+        cmdLine.add(config.getOutAltoArg());
         cmdLine.add(outAltoFile.getAbsolutePath());
 
-        cmdLine.add(onfig.getOutOcrArg());
+        cmdLine.add(config.getOutOcrArg());
         cmdLine.add(outOcrFile.getAbsolutePath());
 
-        for (String arg : onfig.getAdditionalArgs()) {
+        for (String arg : config.getAdditionalArgs()) {
             cmdLine.add(arg);
         }
 
@@ -54,7 +41,7 @@ public class AltoOcrExternalProcess extends ExternalProcess {
 
     @Override
     public long getTimeout() {
-        return onfig.getTimeout();
+        return config.getTimeout();
     }
 
     @Override

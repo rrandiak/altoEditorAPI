@@ -6,6 +6,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Sortable;
 import org.hibernate.search.mapper.pojo.automaticindexing.ReindexOnUpdate;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
@@ -75,7 +77,7 @@ public class AltoVersion {
      * Version number of this digital object.
      */
     @Column(name = "version", nullable = false)
-    @GenericField
+    @GenericField(sortable = Sortable.YES)
     private Integer version;
 
     /**
@@ -89,7 +91,7 @@ public class AltoVersion {
      * State of this digital object.
      */
     @Column(name = "state", nullable = false)
-    @KeywordField
+    @KeywordField(sortable = Sortable.YES)
     private AltoVersionState state;
 
     /**
@@ -97,7 +99,7 @@ public class AltoVersion {
      */
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
-    @GenericField
+    @GenericField(sortable = Sortable.YES)
     private LocalDateTime createdAt;
 
     /**
@@ -105,14 +107,14 @@ public class AltoVersion {
      */
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
-    @GenericField
+    @GenericField(sortable = Sortable.YES)
     private LocalDateTime updatedAt;
 
     /**
      * Set of Kramerius instances where this version is currently used.
      */
     @ElementCollection
-    @CollectionTable(name = "alto_version_present_in_instances", joinColumns = @JoinColumn(name = "alto_version_id"))
+    @CollectionTable(name = "alto_version_present_in_instances", joinColumns = @JoinColumn(name = "alto_version_id", referencedColumnName = "id"))
     @Column(name = "instance")
     @KeywordField
     @Builder.Default
@@ -126,7 +128,7 @@ public class AltoVersion {
 
     // --- Transient fields for search index ---
     @Transient
-    @KeywordField(name = "pid")
+    @KeywordField(name = "pid", sortable = Sortable.YES, projectable = Projectable.YES)
     @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW, derivedFrom = {
             @ObjectPath({
                     @PropertyValue(propertyName = "digitalObject"),
@@ -138,7 +140,7 @@ public class AltoVersion {
     }
 
     @Transient
-    @KeywordField(name = "username")
+    @KeywordField(name = "username", sortable = Sortable.YES)
     @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW, derivedFrom = {
             @ObjectPath({
                     @PropertyValue(propertyName = "user"),
@@ -191,7 +193,7 @@ public class AltoVersion {
 
         DigitalObject current = digitalObject.getParent();
         while (current != null) {
-            ancestorPids.add(current.getUuid().toString());
+            ancestorPids.addFirst(current.getPid());
             current = current.getParent();
         }
 
@@ -216,7 +218,7 @@ public class AltoVersion {
 
         DigitalObject current = digitalObject.getParent();
         while (current != null) {
-            ancestorTitles.add(current.getTitle());
+            ancestorTitles.addFirst(current.getTitle());
             current = current.getParent();
         }
 

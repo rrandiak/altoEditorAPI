@@ -1,6 +1,5 @@
 package cz.inovatika.altoEditor.infrastructure.process;
 
-import java.util.concurrent.Future;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -35,8 +34,8 @@ public class ProcessDispatcher {
                 });
     }
 
-    public <T extends BatchProcess> Future<T> submit(T process) {
-        return executor.submit(process, process);
+    public void submit(BatchProcess process) {
+        executor.execute(process);
     }
 
     public void shutdown() {

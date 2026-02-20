@@ -1,8 +1,16 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -17,6 +25,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.Datastream;
+import cz.inovatika.altoEditor.domain.enums.Model;
 import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusClient;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AccessToken;
@@ -36,7 +45,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class K7Client implements KrameriusClient {
 
-    private static final String METADATA_FL = "pid,model,title.search,level,own_parent.pid,rels_ext_index.sort";
+    private static final String METADATA_FL = "pid,model,title.search,level,own_parent.pid,root.pid,rels_ext_index.sort,count_page";
+    private static final int METADATA_CACHE_EXPIRE_TIME = 10;
+    private static final int METADATA_CACHE_MAX_SIZE = 1000;
+    private static final int CHILDREN_FETCH_ROWS = 300;
 
     private final KrameriusProperties.KrameriusInstance config;
 
@@ -57,6 +69,11 @@ public class K7Client implements KrameriusClient {
      * instance is reused from caches.
      */
     private volatile String serviceToken;
+
+    private final LoadingCache<String, KrameriusObjectMetadata> metadataCache = Caffeine.newBuilder()
+            .expireAfterWrite(METADATA_CACHE_EXPIRE_TIME, TimeUnit.MINUTES)
+            .maximumSize(METADATA_CACHE_MAX_SIZE)
+            .build(this::fetchObjectMetadata);
 
     private HttpEntity<String> createJsonRequestEntity(String token) {
         HttpHeaders headers = new HttpHeaders();
@@ -129,11 +146,14 @@ public class K7Client implements KrameriusClient {
         }
     }
 
-    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields) {
+    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows, int start, String sort) {
         URI uri = UriComponentsBuilder
                 .fromUriString(this.config.buildEndpoint("/search/api/client/v7.0/search"))
                 .queryParam("q", query)
                 .queryParam("fl", returnFields)
+                .queryParam("rows", rows)
+                .queryParam("start", start)
+                .queryParam("sort", sort)
                 .build()
                 .toUri();
 
@@ -148,6 +168,10 @@ public class K7Client implements KrameriusClient {
                         responseType));
 
         return response.getBody();
+    }
+
+    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows) {
+        return searchInSolr(query, returnFields, rows, 0, null);
     }
 
     @Override
@@ -177,9 +201,8 @@ public class K7Client implements KrameriusClient {
         return response.getStatusCode().is2xxSuccessful();
     }
 
-    @Override
-    public KrameriusObjectMetadata getObjectMetadata(String pid) {
-        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", METADATA_FL);
+    private KrameriusObjectMetadata fetchObjectMetadata(String pid) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", METADATA_FL, 1);
 
         if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
             throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
@@ -189,38 +212,104 @@ public class K7Client implements KrameriusClient {
     }
 
     @Override
+    public KrameriusObjectMetadata getObjectMetadata(String pid) {
+        return metadataCache.get(pid);
+    }
+
+    private List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String returnFields) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse;
+        int start = 0;
+        List<KrameriusObjectMetadata> children = new ArrayList<>();
+
+        do {
+            solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\"", returnFields,
+                    CHILDREN_FETCH_ROWS, start, "rels_ext_index.sort asc");
+
+            if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
+                throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
+            }
+
+            children.addAll(
+                    solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
+
+            start += CHILDREN_FETCH_ROWS;
+        } while (solrResponse.getResponse().getNumFound() > start + CHILDREN_FETCH_ROWS);
+
+        return children;
+    }
+
+    @Override
     public List<KrameriusObjectMetadata> getChildrenMetadata(String pid) {
-        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\"", METADATA_FL);
-
-        if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
-            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
-        }
-
-        return solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList();
+        return getChildrenMetadata(pid, METADATA_FL);
     }
 
     @Override
     public int getPagesCount(String pid) {
-        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", "count_page");
+        KrameriusObjectMetadata metadata = getObjectMetadata(pid);
 
-        if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
+        if (metadata == null) {
             throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
         }
 
-        return solrResponse.getResponse().getDocs().get(0).getPagesCount();
+        if (metadata.getPagesCount() != null) {
+            return metadata.getPagesCount();
+        }
+
+        if (Model.PAGE.isModel(metadata.getModel())) {
+            return 0;
+        }
+
+        if (metadata.getLevel() == 0) {
+            SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("root.pid:\"" + pid + "\" AND model:page", "pid", 0);
+
+            if (solrResponse == null) {
+                throw new RuntimeException("Failed to get pages count for root PID " + pid);
+            }
+
+            return solrResponse.getResponse().getNumFound();
+        }
+
+        Queue<String> pidsQueue = new LinkedList<>();
+        pidsQueue.add(pid);
+        AtomicInteger pagesCount = new AtomicInteger(0);
+
+        while (!pidsQueue.isEmpty()) {
+            String currPid = pidsQueue.poll();
+
+            getChildrenMetadata(currPid, "pid,count_page").forEach(child -> {
+                if (child.getPagesCount() != null) {
+                    pagesCount.addAndGet(child.getPagesCount());
+                } else {
+                    pidsQueue.add(child.getPid());
+                }
+            });
+        }
+
+        return pagesCount.get();
     }
 
     @Override
     public int getChildrenCount(String pid) {
+        KrameriusObjectMetadata metadata = getObjectMetadata(pid);
+
+        if (metadata == null) {
+            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
+        }
+
+        if (Model.PAGE.isModel(metadata.getModel())) {
+            return 0;
+        }
+
         SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
                 "own_parent.pid:\"" + pid + "\"",
-                "pid");
+                "pid",
+                0);
 
         if (solrResponse == null) {
             throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
         }
 
-        return solrResponse.getResponse().getDocs().size();
+        return solrResponse.getResponse().getNumFound();
     }
 
     @Override
@@ -243,14 +332,17 @@ public class K7Client implements KrameriusClient {
                         HttpMethod.GET,
                         createXmlAcceptRequestEntity(token),
                         byte[].class));
-        
+
         if (response.getStatusCode() == HttpStatus.NOT_FOUND) {
-            throw new AltoVersionNotFoundException("Alto version for PID " + pid + " not found in Kramerius " + config.getTitle());
+            throw new AltoVersionNotFoundException(
+                    "Alto version for PID " + pid + " not found in Kramerius " + config.getTitle());
         } else if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new RuntimeException("Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle());
+            throw new RuntimeException(
+                    "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle());
         }
 
-        return response.getBody();    }
+        return response.getBody();
+    }
 
     @Override
     public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] altoContent, byte[] ocrContent) {

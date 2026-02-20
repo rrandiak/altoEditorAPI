@@ -34,10 +34,17 @@ public interface DigitalObjectRepository
                 INNER JOIN descendants d ON oh.parent_uuid = d.uuid
             )
             SELECT
-                COUNT(CASE WHEN d.model = 'page' AND d.uuid != :uuid THEN 1 END) as "totalPages",
-                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid AND av.uuid IS NOT NULL THEN d.uuid END) as "pagesWithAlto"
+                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid THEN d.uuid END) as "totalPages",
+                COUNT(DISTINCT CASE WHEN d.model = 'page' AND d.uuid != :uuid AND EXISTS (
+                    SELECT 1 FROM alto_versions av2 WHERE av2.uuid = d.uuid
+                ) THEN d.uuid END) as "pagesWithAlto"
             FROM descendants d
-            LEFT JOIN alto_versions av ON av.uuid = d.uuid
             """, nativeQuery = true)
     PageCountStats getDescendantPageStats(@Param("uuid") UUID uuid);
+
+    /**
+     * Returns true if the given node has at least one direct child whose model is not {@code page}.
+     */
+    @Query("SELECT COUNT(c) > 0 FROM DigitalObject c WHERE c.parent.uuid = :uuid AND c.model <> 'page'")
+    boolean existsNonPageChild(@Param("uuid") UUID uuid);
 }

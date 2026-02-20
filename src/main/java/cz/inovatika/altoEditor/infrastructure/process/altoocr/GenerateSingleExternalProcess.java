@@ -32,6 +32,11 @@ public class GenerateSingleExternalProcess extends ExternalProcess {
         cmdLine.add(config.getOutOcrArg());
         cmdLine.add(outOcrFile.getAbsolutePath());
 
+        if (config.shouldUseApiKey()) {
+            cmdLine.add(config.getApiKeyArg());
+            cmdLine.add(config.getApiKey());
+        }
+
         for (String arg : config.getAdditionalArgs()) {
             cmdLine.add(arg);
         }
@@ -46,7 +51,7 @@ public class GenerateSingleExternalProcess extends ExternalProcess {
 
     @Override
     public boolean isOk() {
-        return outOcrFile.exists() &&
+        return super.isOk() && outOcrFile.exists() &&
                 outAltoFile.exists() && outAltoFile.length() > 0;
     }
 }

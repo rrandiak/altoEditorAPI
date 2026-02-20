@@ -42,6 +42,7 @@ public class K7ObjectMetadataDoc {
                 .level(level)
                 .indexInParent(indexInParent)
                 .parentPid(parentPid)
+                .pagesCount(pagesCount)
                 .build();
     }
 }

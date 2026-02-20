@@ -72,7 +72,7 @@ public class ReindexProcess extends BatchProcess {
         } catch (Exception ex) {
             LOGGER.error("Reindex batch {} failed: {}", batchId, ex.getMessage(), ex);
             try {
-                batchService.setFailed(batch, "Reindex failed: " + ex.getMessage());
+                batchService.setFailed(batch, ex.getMessage());
             } catch (Exception e) {
                 LOGGER.error("Failed to set batch as failed: {}", e.getMessage(), e);
             }

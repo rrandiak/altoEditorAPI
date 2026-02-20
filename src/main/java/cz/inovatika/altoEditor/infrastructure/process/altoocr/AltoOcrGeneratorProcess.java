@@ -93,10 +93,11 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private void runExternalProcess(Batch batch, ExternalProcess externalProcess) {
         externalProcess.run();
         if (!externalProcess.isOk()) {
-            batchService.setFailed(batch,
-                    "Generating ALTO and OCR for PID " + batch.getPid() + " failed: "
-                            + externalProcess.getErr());
-            return;
+            throw new RuntimeException(
+                    "Generating ALTO and OCR for PID " + batch.getPid() + " failed:\n" +
+                            "Exit code: " + externalProcess.getExitCode() + "\n" +
+                            "Out: " + externalProcess.getOut() + "\n" +
+                            "Err: " + externalProcess.getErr());
         }
     }
 
@@ -110,8 +111,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             // --- START PROCESSING ---
             // Do all initializations in this block
             batchService.setState(batch, BatchState.RUNNING);
-
-            workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
+            batchService.setProcessedItemCount(batch, 0);
 
             List<String> targetPids = batch.getType() == BatchType.GENERATE_SINGLE
                     ? List.of(batch.getPid())
@@ -120,6 +120,9 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             batchService.setEstimatedItemCount(batch, targetPids.size());
 
             for (List<String> pidChunk : partitionList(targetPids, engineConfig.getBatchSize())) {
+                // --- CREATE WORKDIR ---
+                workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
+
                 // --- DOWNLOAD IMAGES ---
                 // Download images from Kramerius and save them to workDir
                 batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
@@ -136,7 +139,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                 // and save the results to workDir
                 batchService.setSubstate(batch, BatchSubstate.GENERATING);
 
-                if (engineConfig.isBatchMode()) {
+                if (engineConfig.shouldUseBatchMode()) {
                     runExternalProcess(batch, createBatchExternalProcess(workDir, pidChunk));
                 } else {
                     for (String pid : pidChunk) {
@@ -162,23 +165,22 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
                 // --- CLEANUP WORKDIR ---
                 workDirectoryService.cleanup(workDir);
-                workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
             }
 
             // --- FINISH ---
             batchService.setState(batch, BatchState.DONE);
+            batchService.setSubstate(batch, null);
 
         } catch (Exception ex) {
-            LOGGER.error("Batch " + batch.getId() + " failed: " + ex.getMessage(), ex);
+            workDirectoryService.cleanup(workDir);
+
+            LOGGER.error("AltoOcrGeneratorProcess batch {} failed: {}", batchId, ex.getMessage(), ex);
 
             try {
-                batchService.setFailed(batch, "Batch " + batch.getId() + " failed: " + ex.getMessage());
+                batchService.setFailed(batch, ex.getMessage());
             } catch (Exception e) {
                 LOGGER.error("Failed to set batch as failed: " + e.getMessage(), e);
             }
-
-        } finally {
-            workDirectoryService.cleanup(workDir);
         }
     }
 }

@@ -28,38 +28,47 @@ public class EnginesProperties {
         @NotBlank
         private String entry;
 
-        private String inImageArg = "-i";
-        private String outAltoArg = "-oA";
-        private String outOcrArg = "-oO";
+        private String inImageArg = "--image";
+        private String outAltoArg = "--alto";
+        private String outOcrArg = "--txt";
+
+        private String apiKey = null;
+        private String apiKeyArg = "--key";
+
         private Boolean batchMode = false;
-        private String dataTripletsArg = "-t";
+        private String csvArg = "--csv";
 
         private List<String> additionalArgs = new ArrayList<>();
 
-        /**
-         * When batchMode is false: inImageArg, outAltoArg and outOcrArg must be set.
-         * When batchMode is true: dataTripletsArg must be set.
-         */
-        @AssertTrue(message = """
-                When batchMode is false, inImageArg, outAltoArg and outOcrArg must be set;
-                when batchMode is true, dataTripletsArg must be set
-                """)
-        public boolean isValidEngineArgs() {
-            if (Boolean.TRUE.equals(batchMode)) {
-                return dataTripletsArg != null && !dataTripletsArg.isBlank();
+        @AssertTrue(message = "When batchMode is true, csvArg must be set; when batchMode is false, inImageArg, outAltoArg and outOcrArg must be set.")
+        public boolean isValidBatchModeConfiguration() {
+            if (shouldUseBatchMode()) {
+                return csvArg != null && !csvArg.isBlank();
             }
             return inImageArg != null && !inImageArg.isBlank()
                     && outAltoArg != null && !outAltoArg.isBlank()
                     && outOcrArg != null && !outOcrArg.isBlank();
         }
 
+        @AssertTrue(message = "When useApiKey is true, apiKeyArg must be set.")
+        public boolean isValidApiKeyConfiguration() {
+            if (shouldUseApiKey()) {
+                return apiKeyArg != null && !apiKeyArg.isBlank();
+            }
+            return true;
+        }
+
         @NotNull
-        private Integer batchSize = 100;
+        private Integer batchSize = 1000;
 
         @NotNull
         private Long timeout = 180_000L;
 
-        public boolean isBatchMode() {
+        public boolean shouldUseApiKey() {
+            return apiKey != null && !apiKey.isBlank();
+        }
+
+        public boolean shouldUseBatchMode() {
             return Boolean.TRUE.equals(batchMode);
         }
     }

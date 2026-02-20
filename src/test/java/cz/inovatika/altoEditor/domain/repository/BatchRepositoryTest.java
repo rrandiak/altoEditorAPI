@@ -143,12 +143,12 @@ class BatchRepositoryTest {
             entityManager.flush();
             entityManager.clear();
 
-            int updated = batchRepository.failAllRunningBatches("Application restarted");
+            int updated = batchRepository.failAllRunningAndPlannedBatches("Application restarted");
 
-            assertThat(updated).isEqualTo(2);
+            assertThat(updated).isEqualTo(3);
 
             List<Batch> failed = batchRepository.findByStateOrderByIdAsc(BatchState.FAILED);
-            assertThat(failed).hasSize(2);
+            assertThat(failed).hasSize(3);
             assertThat(failed).allMatch(b -> b.getLog() != null && b.getLog().contains("Application restarted"));
 
             Batch reloaded1 = batchRepository.findById(running1.getId()).orElseThrow();
@@ -156,17 +156,17 @@ class BatchRepositoryTest {
             assertThat(reloaded1.getLog()).contains("Application restarted");
 
             Batch plannedBatch = batchRepository.findById(planned.getId()).orElseThrow();
-            assertThat(plannedBatch.getState()).isEqualTo(BatchState.PLANNED);
+            assertThat(plannedBatch.getState()).isEqualTo(BatchState.FAILED);
         }
 
         @Test
         @DisplayName("returns 0 when no RUNNING batches")
         void returnsZero_whenNoRunningBatches() {
-            batchRepository.save(createBatch("uuid:1", BatchState.PLANNED, "dk"));
+            batchRepository.save(createBatch("uuid:1", BatchState.DONE, "dk"));
             batchRepository.save(createBatch("uuid:2", BatchState.FAILED, "dk"));
             entityManager.flush();
 
-            int updated = batchRepository.failAllRunningBatches("Application restarted");
+            int updated = batchRepository.failAllRunningAndPlannedBatches("Application restarted");
 
             assertThat(updated).isEqualTo(0);
         }

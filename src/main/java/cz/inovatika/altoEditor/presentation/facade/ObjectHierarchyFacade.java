@@ -62,7 +62,9 @@ public class ObjectHierarchyFacade {
                 request.getTitle(),
                 request.getLevel(),
                 request.getOffset(),
-                request.getLimit());
+                request.getLimit(),
+                request.getSortBy(),
+                request.getSortOrder());
 
         return SearchResultsDto.<HierarchySearchDto>builder()
                 .items(result.hits().stream().map(mapper::toSearchDto).toList())
@@ -95,8 +97,10 @@ public class ObjectHierarchyFacade {
     }
 
     /** Start batch to generate ALTO for hierarchy rooted at PID. */
-    public BatchDto generateAlto(String pid, BatchPriority priority) {
-        Batch batch = service.createGenerateAltoBatch(pid, priority, userContext.getUserId());
+    public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
+        String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
+
+        Batch batch = service.createGenerateAltoBatch(pid, engine, finalInstance, priority, userContext.getUserId());
 
         processDispatcher.submit(altoGeneratorProcessFactory.create(batch));
 
@@ -104,8 +108,10 @@ public class ObjectHierarchyFacade {
     }
 
     /** Start batch to fetch hierarchy from Kramerius and store locally. */
-    public BatchDto fetchFromKramerius(String pid, BatchPriority priority) {
-        Batch batch = service.createFetchFromKrameriusBatch(pid, priority, userContext.getUserId());
+    public BatchDto fetchFromKramerius(String pid, String instance, BatchPriority priority) {
+        String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
+
+        Batch batch = service.createFetchFromKrameriusBatch(pid, finalInstance, priority, userContext.getUserId());
 
         processDispatcher.submit(retrieveHierarchyProcessFactory.create(batch));
 

@@ -1,9 +1,11 @@
 package cz.inovatika.altoEditor.domain.model;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.search.engine.backend.types.Sortable;
 import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.RoutingBinderRef;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
@@ -13,11 +15,14 @@ import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.ObjectPath;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.PropertyValue;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import cz.inovatika.altoEditor.domain.enums.Model;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -26,6 +31,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -40,6 +46,7 @@ import lombok.ToString;
 @Data
 @ToString(exclude = { "children" })
 @Builder(builderClassName = "DigitalObjectBuilder", toBuilder = true)
+@EntityListeners(AuditingEntityListener.class)
 @NoArgsConstructor
 @AllArgsConstructor
 @Indexed(routingBinder = @RoutingBinderRef(type = DigitalObjectRoutingBinder.class))
@@ -69,23 +76,45 @@ public class DigitalObject {
     @FullTextField(name = "title")
     private String title;
 
+    /** Sortable copy of title (FullTextField is analyzed and cannot be sorted). */
+    @Transient
+    @KeywordField(name = "title_sort", sortable = Sortable.YES)
+    @IndexingDependency(derivedFrom = @ObjectPath(@PropertyValue(propertyName = "title")))
+    public String getTitleSort() {
+        return title;
+    }
+
     @Column(columnDefinition = "smallint")
-    @GenericField(name = "level")
+    @GenericField(name = "level", sortable = Sortable.YES)
     private Integer level;
 
     @Column(columnDefinition = "smallint")
-    @GenericField(name = "indexInParent")
+    @GenericField(name = "indexInParent", sortable = Sortable.YES)
     private Integer indexInParent;
+
+    /**
+     * Timestamp of last update of this digital object.
+     */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    @GenericField(sortable = Sortable.YES)
+    private LocalDateTime updatedAt;
 
     /** Total descendant pages (excluding this node if it is a page). Persisted and updated on hierarchy/ALTO changes. */
     @Column(name = "pages_count")
-    @GenericField(name = "pagesCount")
+    @GenericField(name = "pagesCount", sortable = Sortable.YES)
     private Integer pagesCount;
 
     /** Descendant pages that have at least one ALTO version. Persisted and updated on hierarchy/ALTO changes. */
     @Column(name = "pages_with_alto")
-    @GenericField(name = "pagesWithAlto")
+    @GenericField(name = "pagesWithAlto", sortable = Sortable.YES)
     private Integer pagesWithAlto;
+
+    /** True if this node has at least one child whose model is not {@code page}. Updated when hierarchy is refreshed. */
+    @Column(name = "has_subhierarchy", nullable = false)
+    @GenericField(name = "hasSubhierarchy")
+    @Builder.Default
+    private boolean hasSubhierarchy = false;
 
     @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "alto_version_id")
@@ -112,7 +141,7 @@ public class DigitalObject {
         }
     }
 
-    @KeywordField(name = "pid")
+    @KeywordField(name = "pid", sortable = Sortable.YES)
     @IndexingDependency(derivedFrom = @ObjectPath(@PropertyValue(propertyName = "uuid")))
     public String getPid() {
         return "uuid:" + this.getUuid().toString();

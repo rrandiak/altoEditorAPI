@@ -66,10 +66,9 @@ public interface AltoVersionRepository
                 FROM AltoVersion d
                 WHERE d.digitalObject.uuid = :uuid
                 AND d.user.id = :userId
-                AND d.contentHash = :contentHash
                 AND d.state in (AltoVersionState.ACTIVE, AltoVersionState.PENDING, AltoVersionState.ARCHIVED)
             """)
-    Optional<AltoVersion> findEngineUpdateCandidate(UUID uuid, Long userId, String contentHash);
+    Optional<AltoVersion> findEngineUpdateCandidate(UUID uuid, Long userId);
 
     /**
      * Find digital object by UUID and version
@@ -85,17 +84,17 @@ public interface AltoVersionRepository
      * Find digital object by UUID with priority ordering based on version and user
      * type.
      * The digital object is retrieved in the following order:
-     * 1. The version owned by the current user.
+     * 1. The version owned by the current user in 'PENDING' state.
      * 2. The version currently in 'ACTIVE' state.
      */
     @Query("""
                 SELECT d
                 FROM AltoVersion d
                 WHERE d.digitalObject.uuid = :uuid
-                    AND (d.user.id = :userId
+                    AND ((d.user.id = :userId AND d.state = AltoVersionState.PENDING)
                         OR d.state = AltoVersionState.ACTIVE)
                 ORDER BY CASE
-                    WHEN d.user.id = :userId THEN 0
+                    WHEN d.user.id = :userId AND d.state = AltoVersionState.PENDING THEN 0
                     ELSE 1
                 END
                 LIMIT 1

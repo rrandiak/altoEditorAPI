@@ -19,60 +19,60 @@ def main():
         os.makedirs(pero_temp_path, mode=0o777)
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-i", "--image_path", help="Input image path.", required=True
+        "-i", "--image", help="Input image path.", required=True
     )
     parser.add_argument(
-        "-oO", "--output_txt", help="Output path for txt. ", required=True
+        "-t", "--txt", help="Output path for OCR txt. ", required=True
     )
     parser.add_argument(
-        "-oA", "--output_alto", help="Output path for alto.", required=True
+        "-a", "--alto", help="Output path for ALTO xml.", required=True
     )
     parser.add_argument(
-        "-key",
-        "--api_key",
+        "-k",
+        "--key",
         help="Api Key for your Organization",
         required=True,
     )
     args = parser.parse_args()
 
-    if not args.image_path:
+    if not args.image:
         sys.stderr.write("Error: Image path is required.")
         exit(-1)
-    if not args.output_txt:
+    if not args.txt:
         sys.stderr.write("Error: Output txt path is required.")
         exit(-1)
-    if not args.output_alto:
+    if not args.alto:
         sys.stderr.write("Error: Output alto path is required.")
         exit(-1)
-    if not args.api_key:
+    if not args.key:
         sys.stderr.write("Error: API key is required.")
         exit(-1)
 
-    if os.path.exists(args.output_txt) and os.path.exists(args.output_alto):
+    if os.path.exists(args.txt) and os.path.exists(args.alto):
         exit(0)
 
     is_converted = False
-    image_path = args.image_path
-    file_extension = os.path.basename(args.image_path).split(".")[1]
+    image_path = args.image
+    file_extension = os.path.basename(args.image).split(".")[1]
     if file_extension == "tif" or file_extension == "tiff":
         if os.path.exists(
             os.path.join(
-                os.path.dirname(args.image_path),
-                os.path.basename(args.image_path).split(".")[0] + ".jpg",
+                os.path.dirname(args.image),
+                os.path.basename(args.image).split(".")[0] + ".jpg",
             )
         ):
             image_path = os.path.join(
-                os.path.dirname(args.image_path),
-                os.path.basename(args.image_path).split(".")[0] + ".jpg",
+                os.path.dirname(args.image),
+                os.path.basename(args.image).split(".")[0] + ".jpg",
             )
-            file_name = os.path.basename(args.image_path).split(".")[0]
+            file_name = os.path.basename(args.image).split(".")[0]
             is_converted = False
         else:
-            image_path = convert_tif(args.image_path)
+            image_path = convert_tif(args.image)
             file_name = os.path.basename(image_path).split(".")[0]
             is_converted = True
     else:
-        file_name = os.path.basename(args.image_path).split(".")[0]
+        file_name = os.path.basename(args.image).split(".")[0]
     content_type = get_content_type(file_extension)
 
     data = create_json(file_name)
@@ -80,7 +80,7 @@ def main():
     alto_format = "alto"
 
     session = requests.Session()
-    request_id = post_processing_request(session, data, args.api_key)
+    request_id = post_processing_request(session, data, args.key)
 
     try:
         upload_image(
@@ -89,7 +89,7 @@ def main():
             file_name,
             image_path,
             content_type,
-            args.api_key,
+            args.key,
         )
     except FileNotFoundError as err:
         sys.stderr.write(f"Error: {err}")
@@ -105,20 +105,20 @@ def main():
     while processing_result != "PROCESSED":
         processing_result = download_results(
             session,
-            args.output_txt,
+            args.txt,
             request_id,
             file_name,
             txt_format,
-            args.api_key,
+            args.key,
         )
         if processing_result == "PROCESSED":
             download_results(
                 session,
-                args.output_alto,
+                args.alto,
                 request_id,
                 file_name,
                 alto_format,
-                args.api_key,
+                args.key,
             )
         else:
             time.sleep(5)

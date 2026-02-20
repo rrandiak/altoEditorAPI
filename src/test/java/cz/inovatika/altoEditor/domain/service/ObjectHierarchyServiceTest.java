@@ -54,6 +54,7 @@ class ObjectHierarchyServiceTest {
     private static final String PAGE_PID = "uuid:11111111-1111-2222-3333-444444444444";
     private static final String ROOT_PID = "uuid:22222222-1111-2222-3333-444444444444";
     private static final String INSTANCE = "dk";
+    private static final String ENGINE = "engine";
     private static final Long USER_ID = 10L;
     private static final User USER = User.builder().id(USER_ID).username("user").build();
 
@@ -251,7 +252,7 @@ class ObjectHierarchyServiceTest {
             when(userService.getUserById(USER_ID)).thenReturn(USER);
             when(batchRepository.save(any(Batch.class))).thenReturn(batch);
 
-            Batch result = service.createGenerateAltoBatch(PAGE_PID, BatchPriority.MEDIUM, USER_ID);
+            Batch result = service.createGenerateAltoBatch(PAGE_PID,  ENGINE, INSTANCE, BatchPriority.MEDIUM, USER_ID);
 
             assertThat(result).isEqualTo(batch);
             assertThat(result.getType()).isEqualTo(BatchType.GENERATE_FOR_HIERARCHY);
@@ -277,7 +278,7 @@ class ObjectHierarchyServiceTest {
             when(userService.getUserById(USER_ID)).thenReturn(USER);
             when(batchRepository.save(any(Batch.class))).thenReturn(batch);
 
-            Batch result = service.createFetchFromKrameriusBatch(PAGE_PID, BatchPriority.HIGH, USER_ID);
+            Batch result = service.createFetchFromKrameriusBatch(PAGE_PID, INSTANCE, BatchPriority.HIGH, USER_ID);
 
             assertThat(result).isEqualTo(batch);
             assertThat(result.getType()).isEqualTo(BatchType.RETRIEVE_HIERARCHY);

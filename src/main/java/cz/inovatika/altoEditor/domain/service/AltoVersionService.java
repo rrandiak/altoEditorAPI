@@ -3,11 +3,14 @@ package cz.inovatika.altoEditor.domain.service;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.hibernate.search.engine.search.query.SearchResult;
+import org.hibernate.search.engine.search.sort.dsl.SortOrder;
 import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.springframework.stereotype.Service;
@@ -73,7 +76,9 @@ public class AltoVersionService {
             LocalDateTime createdBefore,
             List<AltoVersionState> states,
             int offset,
-            int limit) {
+            int limit,
+            String sortBy,
+            SortOrder sortOrder) {
 
         SearchSession session = Search.session(entityManager);
 
@@ -82,11 +87,8 @@ public class AltoVersionService {
         var query = session.search(AltoVersion.class)
                 .where(f -> {
                     var bool = f.bool();
-                    // userId or ACTIVE state
-                    var userOrActive = f.bool()
-                            .should(f.match().field("username").matching(username))
-                            .should(f.match().field("state").matching(AltoVersionState.ACTIVE));
-                    bool.must(userOrActive);
+
+                    bool.must(f.bool().should(f.match().field("username").matching(username)));
                     if (instance != null) {
                         bool.must(f.match().field("instance").matching(instance));
                     }
@@ -94,7 +96,9 @@ public class AltoVersionService {
                         bool.must(f.match().field("pid").matching(targetPid));
                     }
                     if (hierarchyPid != null) {
-                        bool.must(f.terms().field("ancestorPids").matchingAny(hierarchyPid));
+                        var targetOrHierarchy = f.bool().should(f.match().field("pid").matching(hierarchyPid))
+                                .should(f.terms().field("ancestorPids").matchingAny(hierarchyPid));
+                        bool.must(targetOrHierarchy);
                     }
                     if (title != null) {
                         // Match title in either pageTitle or ancestorTitles
@@ -115,6 +119,10 @@ public class AltoVersionService {
                     return bool;
                 });
 
+        if (sortBy != null) {
+            query.sort(f -> f.field(sortBy).order(sortOrder));
+        }
+
         return query.fetch(offset, limit);
     }
 
@@ -123,13 +131,15 @@ public class AltoVersionService {
             List<Long> users,
             String instance,
             String targetPid,
-            String ancestorPid,
+            String hierarchyPid,
             String title,
             LocalDateTime createdAfter,
             LocalDateTime createdBefore,
             List<AltoVersionState> states,
             int offset,
-            int limit) {
+            int limit,
+            String sortBy,
+            SortOrder sortOrder) {
 
         SearchSession session = Search.session(entityManager);
 
@@ -138,7 +148,7 @@ public class AltoVersionService {
                 .collect(Collectors.toList()) : null;
 
         boolean hasFilter = (users != null && !users.isEmpty())
-                || instance != null || targetPid != null || ancestorPid != null
+                || instance != null || targetPid != null || hierarchyPid != null
                 || title != null || createdAfter != null || createdBefore != null
                 || (states != null && !states.isEmpty());
 
@@ -157,8 +167,10 @@ public class AltoVersionService {
                         if (targetPid != null) {
                             bool.must(f.match().field("pid").matching(targetPid));
                         }
-                        if (ancestorPid != null) {
-                            bool.must(f.terms().field("ancestorPids").matchingAny(ancestorPid));
+                        if (hierarchyPid != null) {
+                            var targetOrHierarchy = f.bool().should(f.match().field("pid").matching(hierarchyPid))
+                                    .should(f.terms().field("ancestorPids").matchingAny(hierarchyPid));
+                            bool.must(targetOrHierarchy);
                         }
                         if (title != null) {
                             // Match title in either pageTitle or ancestorTitles
@@ -180,6 +192,10 @@ public class AltoVersionService {
                     return bool;
                 });
 
+        if (sortBy != null) {
+            query.sort(f -> f.field(sortBy).order(sortOrder));
+        }
+
         return query.fetch(offset, limit);
     }
 
@@ -187,9 +203,11 @@ public class AltoVersionService {
     public List<String> distinctPidsByAncestorPid(String ancestorPid) {
         return Search.session(entityManager)
                 .search(AltoVersion.class)
-                .select(f -> f.field("pid", String.class))
+                .select(f -> f.entity())
                 .where(f -> f.terms().field("ancestorPids").matchingAny(ancestorPid))
                 .fetchAllHits().stream()
+                .map(AltoVersion::getPid)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
     }
@@ -204,7 +222,7 @@ public class AltoVersionService {
 
     /**
      * The ALTO content is retrieved in the following order:
-     * 1. The version owned by the current user.
+     * 1. The version owned by the current user in 'PENDING' state.
      * 2. The version currently in 'ACTIVE' state.
      */
     public Optional<AltoVersion> findRelated(String pid, Long userId) {
@@ -242,6 +260,7 @@ public class AltoVersionService {
      * - no ALTO version exists for the given PID
      * - user permission was checked before calling this method
      */
+    @Transactional
     public AltoVersionWithContent createInitialVersion(String pid, String instance) {
         if (repository.existsByDigitalObjectUuid(this.parseUuid(pid))) {
             throw new AltoVersionAlreadyExistsException("Digital object with PID already exists: " + pid);
@@ -264,8 +283,11 @@ public class AltoVersionService {
                         .digitalObject(targetObj)
                         .version(0)
                         .state(AltoVersionState.ACTIVE)
+                        .presentInInstances(Set.of(instance))
                         .contentHash(contentHash)
                         .build());
+
+        objectHierarchyService.refreshPageCountsForAncestors(targetObj.getUuid());
 
         return new AltoVersionWithContent(obj, content);
     }
@@ -311,22 +333,27 @@ public class AltoVersionService {
     private AltoVersion createNewAltoVersion(
             String pid, Long userId, byte[] altoContent, AltoVersionState state) {
         User user = userService.getUserById(userId);
+        UUID uuid = PidAdapter.toUuid(pid);
 
-        Optional<AltoVersion> objOpt = repository
-                .findFirstByDigitalObjectUuidOrderByVersionDesc(PidAdapter.toUuid(pid));
+        DigitalObject digitalObject;
+        int newVersion;
 
-        if (objOpt.isEmpty()) {
-            throw new AltoVersionNotFoundException("Digital object not found for PID: " + pid);
+        Optional<AltoVersion> existingOpt = repository.findFirstByDigitalObjectUuidOrderByVersionDesc(uuid);
+        if (existingOpt.isPresent()) {
+            AltoVersion existing = existingOpt.get();
+            digitalObject = existing.getDigitalObject();
+            newVersion = existing.getVersion() + 1;
+        } else {
+            digitalObject = digitalObjectRepository.findById(uuid)
+                    .orElseThrow(() -> new DigitalObjectNotFoundException(uuid));
+            newVersion = 0;
         }
-
-        AltoVersion obj = objOpt.get();
-        int newVersion = obj.getVersion() + 1;
 
         akubraService.saveAltoContent(pid, newVersion, altoContent);
 
         return repository.save(AltoVersion.builder()
                 .user(user)
-                .digitalObject(obj.getDigitalObject())
+                .digitalObject(digitalObject)
                 .version(newVersion)
                 .state(state)
                 .contentHash(altoXmlService.computeHash(altoContent))
@@ -347,6 +374,7 @@ public class AltoVersionService {
      * Preconditions:
      * - DigitalObject for the given PID exists
      */
+    @Transactional
     public AltoVersionWithContent updateOrCreateVersion(String pid, Long userId, byte[] altoContent) {
         Optional<AltoVersion> altoVersionOpt = repository.findPendingForUser(PidAdapter.toUuid(pid), userId);
 
@@ -379,6 +407,7 @@ public class AltoVersionService {
      * Preconditions:
      * - DigitalObject for the given PID exists
      */
+    @Transactional
     public AltoVersion updateOrCreateKrameriusVersion(String pid, Long userId, byte[] content) {
         Optional<AltoVersion> altoVersionOpt = repository.findActive(PidAdapter.toUuid(pid));
 
@@ -395,7 +424,7 @@ public class AltoVersionService {
         String instance = userService.getUserById(userId).getUsername();
 
         if (altoVersion.getPresentInInstances().contains(instance)
-                && altoVersion.getContentHash() == contentHash) {
+                && Objects.equals(altoVersion.getContentHash(), contentHash)) {
             return altoVersion;
         }
 
@@ -403,7 +432,7 @@ public class AltoVersionService {
 
         if (staleVersionOpt.isPresent() &&
                 staleVersionOpt.get().getPresentInInstances().contains(instance)
-                && staleVersionOpt.get().getContentHash() == contentHash) {
+                && Objects.equals(staleVersionOpt.get().getContentHash(), contentHash)) {
             return staleVersionOpt.get();
         }
 
@@ -422,24 +451,46 @@ public class AltoVersionService {
      * Futhermore, if the version is in ARCHIVED state, change its state to PENDING.
      * 2. Otherwise, create new PENDING version.
      */
+    @Transactional
     public AltoVersion updateOrCreateEngineVersion(String pid, Long userId, byte[] content) {
-        Optional<AltoVersion> altoVersionOpt = repository.findEngineUpdateCandidate(
-                PidAdapter.toUuid(pid), userId, altoXmlService.computeHash(content));
+        UUID uuid = PidAdapter.toUuid(pid);
+        Optional<AltoVersion> altoVersionOpt = repository.findEngineUpdateCandidate(uuid, userId);
 
-        if (altoVersionOpt.isPresent()) {
-            AltoVersion altoVersion = altoVersionOpt.get();
+        // No version found, create new PENDING version
+        if (altoVersionOpt.isEmpty()) {
+            AltoVersion created = createNewAltoVersion(pid, userId, content, AltoVersionState.PENDING);
+            objectHierarchyService.refreshPageCountsForAncestors(uuid);
+            return created;
+        }
 
-            if (altoVersion.getState() == AltoVersionState.ARCHIVED) {
-                altoVersion.setState(AltoVersionState.PENDING);
-                repository.save(altoVersion);
-            }
-            objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+        AltoVersion altoVersion = altoVersionOpt.get();
+
+        // Version found and content is the same, return it
+        if (Objects.equals(altoVersion.getContentHash(), altoXmlService.computeHash(content))) {
             return altoVersion;
         }
 
-        AltoVersion created = createNewAltoVersion(pid, userId, content, AltoVersionState.PENDING);
-        objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
-        return created;
+        // ACTIVE version found, content is different, create new PENDING version
+        if (altoVersion.getState() == AltoVersionState.ACTIVE) {
+            AltoVersion created = createNewAltoVersion(pid, userId, content, AltoVersionState.PENDING);
+            objectHierarchyService.refreshPageCountsForAncestors(uuid);
+            return created;
+        }
+
+        // ARCHIVED version found, change its state to PENDING and return it
+        if (altoVersion.getState() == AltoVersionState.ARCHIVED) {
+            altoVersion.setState(AltoVersionState.PENDING);
+        }
+
+        // Save new content
+        akubraService.saveAltoContent(altoVersion.getPid(), altoVersion.getVersion(), content);
+        altoVersion.setContentHash(altoXmlService.computeHash(content));
+
+        // Save and refresh page counts
+        repository.save(altoVersion);
+        objectHierarchyService.refreshPageCountsForAncestors(uuid);
+
+        return altoVersion;
     }
 
     public String getOcr(Integer objectId) {
@@ -463,7 +514,8 @@ public class AltoVersionService {
         return krameriusService.getImageBytes(pid, instance);
     }
 
-    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId) {
+    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority,
+            Long userId) {
         if (!digitalObjectRepository.existsById(PidAdapter.toUuid(pid))) {
             throw new DigitalObjectNotFoundException(PidAdapter.toUuid(pid));
         }
@@ -559,11 +611,10 @@ public class AltoVersionService {
         AltoVersion obj = repository.findById(objectId)
                 .orElseThrow(() -> new RuntimeException("Digital object not found with ID: " + objectId));
 
-
         byte[] altoContent = akubraService.retrieveDsBinaryContent(
-                        obj.getDigitalObject().getPid(),
-                        Datastream.ALTO,
-                        obj.getVersion());
+                obj.getDigitalObject().getPid(),
+                Datastream.ALTO,
+                obj.getVersion());
         byte[] ocrContent = altoXmlService.convertAltoToOcr(altoContent).getBytes(StandardCharsets.UTF_8);
 
         return new AltoVersionUploadContent(obj.getDigitalObject().getPid(), altoContent, ocrContent);

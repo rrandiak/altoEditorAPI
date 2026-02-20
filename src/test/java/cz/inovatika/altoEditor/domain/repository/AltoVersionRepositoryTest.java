@@ -270,27 +270,27 @@ class AltoVersionRepositoryTest {
     class FindEngineUpdateCandidate {
 
         @Test
-        @DisplayName("returns version when user, contentHash and state match")
-        void returnsVersion_whenUserHashAndStateMatch() {
-            repository.save(createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.ACTIVE, VERSION_1, "abc123"));
+        @DisplayName("returns PENDING version when user has no version")
+        void returnsPendingVersion_whenUserHasNoVersion() {
+            repository.save(createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.PENDING, VERSION_1, "abc123"));
             entityManager.flush();
 
-            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId(), "abc123");
+            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId());
 
             assertThat(result).isPresent();
-            assertThat(result.get().getContentHash()).isEqualTo("abc123");
-            assertThat(result.get().getState()).isEqualTo(AltoVersionState.ACTIVE);
+            assertThat(result.get().getState()).isEqualTo(AltoVersionState.PENDING);
         }
 
         @Test
-        @DisplayName("returns empty when contentHash does not match")
-        void returnsEmpty_whenContentHashMismatch() {
+        @DisplayName("returns ACTIVE version when user has ACTIVE version")
+        void returnsActiveVersion_whenUserHasActiveVersion() {
             repository.save(createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.ACTIVE, VERSION_1, "hash1"));
             entityManager.flush();
 
-            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId(), "hash2");
+            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId());
 
-            assertThat(result).isEmpty();
+            assertThat(result).isPresent();
+            assertThat(result.get().getState()).isEqualTo(AltoVersionState.ACTIVE);
         }
 
         @Test
@@ -299,7 +299,7 @@ class AltoVersionRepositoryTest {
             repository.save(createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.PENDING, VERSION_1, "same"));
             entityManager.flush();
 
-            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId(), "same");
+            Optional<AltoVersion> result = repository.findEngineUpdateCandidate(TEST_UUID, CURRENT_USER.getId());
 
             assertThat(result).isPresent();
             assertThat(result.get().getState()).isEqualTo(AltoVersionState.PENDING);
@@ -311,9 +311,9 @@ class AltoVersionRepositoryTest {
     class FindRelated {
 
         @Test
-        @DisplayName("prioritizes current user's version over ACTIVE")
+        @DisplayName("prioritizes current user's PENDING version over ACTIVE")
         void prioritizesUserOverActive() {
-            AltoVersion userObj = createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.ARCHIVED, VERSION_1);
+            AltoVersion userObj = createAltoVersion(TEST_PID, CURRENT_USER, TEST_INSTANCE, AltoVersionState.PENDING, VERSION_1);
             AltoVersion activeObj = createAltoVersion(TEST_PID, PERO_USER, TEST_INSTANCE, AltoVersionState.ACTIVE, VERSION_2);
             repository.save(userObj);
             repository.save(activeObj);
@@ -323,7 +323,7 @@ class AltoVersionRepositoryTest {
 
             assertThat(result).isPresent();
             assertThat(result.get().getUser().getId()).isEqualTo(CURRENT_USER.getId());
-            assertThat(result.get().getState()).isEqualTo(AltoVersionState.ARCHIVED);
+            assertThat(result.get().getState()).isEqualTo(AltoVersionState.PENDING);
         }
 
         @Test

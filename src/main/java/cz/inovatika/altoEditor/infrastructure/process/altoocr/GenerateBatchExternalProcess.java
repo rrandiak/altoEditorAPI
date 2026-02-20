@@ -34,8 +34,13 @@ public class GenerateBatchExternalProcess extends ExternalProcess {
         cmdLine.add(config.getExec());
         cmdLine.add(config.getEntry());
 
-        cmdLine.add(config.getDataTripletsArg());
+        cmdLine.add(config.getCsvArg());
         cmdLine.add(dataTripletsFile.getAbsolutePath());
+
+        if (config.shouldUseApiKey()) {
+            cmdLine.add(config.getApiKeyArg());
+            cmdLine.add(config.getApiKey());
+        }
 
         for (String arg : config.getAdditionalArgs()) {
             cmdLine.add(arg);
@@ -51,7 +56,7 @@ public class GenerateBatchExternalProcess extends ExternalProcess {
 
     @Override
     public boolean isOk() {
-        return dataTriplets.stream().allMatch(
+        return super.isOk() && dataTriplets.stream().allMatch(
             DataTriplet::isOk
         );
     }

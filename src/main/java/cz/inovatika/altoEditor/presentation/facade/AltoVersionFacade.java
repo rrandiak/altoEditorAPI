@@ -60,7 +60,9 @@ public class AltoVersionFacade {
                 request.getCreatedBefore(),
                 request.getStates(),
                 request.getOffset(),
-                request.getLimit());
+                request.getLimit(),
+                request.getSortBy(),
+                request.getSortOrder());
 
         return SearchResultsDto.<AltoVersionSearchDto>builder()
                 .items(results.hits().stream().map(mapper::toSearchDto).toList())
@@ -80,7 +82,9 @@ public class AltoVersionFacade {
                 request.getCreatedBefore(),
                 request.getStates(),
                 request.getOffset(),
-                request.getLimit());
+                request.getLimit(),
+                request.getSortBy(),
+                request.getSortOrder());
         
         return SearchResultsDto.<AltoVersionSearchDto>builder()
                 .items(results.hits().stream().map(mapper::toSearchDto).toList())

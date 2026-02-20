@@ -3,6 +3,8 @@ package cz.inovatika.altoEditor.presentation.dto.request;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.hibernate.search.engine.search.sort.dsl.SortOrder;
+
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import lombok.Data;
 
@@ -24,4 +26,6 @@ public class AltoVersionSearchRelatedRequest {
 
     private int offset = 0;
     private int limit = 10;
+    private String sortBy = "updatedAt";
+    private SortOrder sortOrder = SortOrder.DESC;
 }

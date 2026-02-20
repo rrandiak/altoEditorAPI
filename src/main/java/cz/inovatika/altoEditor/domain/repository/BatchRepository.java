@@ -32,7 +32,7 @@ public interface BatchRepository extends JpaRepository<Batch, Integer>,
                 UPDATE Batch b
                 SET b.state = BatchState.FAILED,
                     b.log = CONCAT(COALESCE(b.log, ''), :log)
-                WHERE b.state = BatchState.RUNNING
+                WHERE b.state IN (BatchState.RUNNING, BatchState.PLANNED)
             """)
-    int failAllRunningBatches(@Param("log") String log);
+    int failAllRunningAndPlannedBatches(@Param("log") String log);
 }

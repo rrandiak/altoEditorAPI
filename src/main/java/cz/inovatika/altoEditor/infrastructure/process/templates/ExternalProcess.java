@@ -31,7 +31,7 @@ public class ExternalProcess implements Runnable {
                 if (isOk()) {
                     return ;
                 }
-                LOGGER.warn("{0}. failure, \n{1}, \nCmd: {2}",
+                LOGGER.warn("{}. failure, \n{}, \nCmd: {}",
                         new Object[]{i + 1, getFullOutput(), cmdLine});
             }
         } catch (IOException ex) {

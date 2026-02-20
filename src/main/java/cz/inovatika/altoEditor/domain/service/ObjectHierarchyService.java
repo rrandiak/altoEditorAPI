@@ -2,8 +2,10 @@ package cz.inovatika.altoEditor.domain.service;
 
 import java.util.Optional;
 import java.util.Stack;
+import java.util.UUID;
 
 import org.hibernate.search.engine.search.query.SearchResult;
+import org.hibernate.search.engine.search.sort.dsl.SortOrder;
 import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import cz.inovatika.altoEditor.exception.DigitalObjectNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -37,29 +40,40 @@ public class ObjectHierarchyService {
     private final BatchRepository batchRepository;
 
     public SearchResult<DigitalObject> search(String pid, String parentPid, String model, String title, Integer level,
-            int offset, int limit) {
+            int offset, int limit, String sortBy, SortOrder sortOrder) {
         SearchSession session = Search.session(entityManager);
+
+        boolean hasFilter = pid != null || parentPid != null || model != null || title != null || level != null;
 
         var searchQuery = session.search(DigitalObject.class)
                 .where(f -> {
                     var bool = f.bool();
-                    if (pid != null) {
-                        bool.must(f.match().field("pid").matching(pid));
-                    }
-                    if (parentPid != null) {
-                        bool.must(f.match().field("parentPid").matching(parentPid));
-                    }
-                    if (model != null) {
-                        bool.must(f.match().field("model").matching(model));
-                    }
-                    if (title != null) {
-                        bool.must(f.match().field("title").matching(title));
-                    }
-                    if (level != null) {
-                        bool.must(f.match().field("level").matching(level));
+                    if (!hasFilter) {
+                        bool.must(f.matchAll());
+                    } else {
+                        if (pid != null) {
+                            bool.must(f.match().field("pid").matching(pid));
+                        }
+                        if (parentPid != null) {
+                            bool.must(f.match().field("parentPid").matching(parentPid));
+                        }
+                        if (model != null) {
+                            bool.must(f.match().field("model").matching(model));
+                        }
+                        if (title != null) {
+                            bool.must(f.match().field("title").matching(title));
+                        }
+                        if (level != null) {
+                            bool.must(f.match().field("level").matching(level));
+                        }
                     }
                     return bool;
                 });
+        
+        if (sortBy != null) {
+            String sortField = "title".equals(sortBy) ? "title_sort" : sortBy;
+            searchQuery.sort(f -> f.field(sortField).order(sortOrder));
+        }
 
         return searchQuery.fetch(offset, limit);
     }
@@ -81,6 +95,7 @@ public class ObjectHierarchyService {
      * @param instance
      * @return
      */
+    @Transactional
     public DigitalObject fetchAndStore(String pid, String instance) {
         // Check if already present
         Optional<DigitalObject> existing = digitalObjectRepository.findById(PidAdapter.toUuid(pid));
@@ -128,16 +143,17 @@ public class ObjectHierarchyService {
         return parent;
     }
 
+    @Transactional
     public DigitalObject store(KrameriusObjectMetadata metadata) {
         Optional<DigitalObject> existing = digitalObjectRepository.findById(metadata.getUuid());
         if (existing.isPresent()) {
             return existing.get();
         }
 
-        DigitalObject parent = null;
-        if (metadata.getParentPid() != null) {
-            parent = digitalObjectRepository.findById(metadata.getParentUuid()).orElse(null);
-        }
+        DigitalObject parent = metadata.getParentPid() != null
+                ? digitalObjectRepository.findById(metadata.getParentUuid())
+                        .orElseThrow(() -> new DigitalObjectNotFoundException(metadata.getParentUuid()))
+                : null;
 
         DigitalObject digitalObject = DigitalObject.builder()
                 .pid(metadata.getPid())
@@ -154,27 +170,42 @@ public class ObjectHierarchyService {
     }
 
     /**
-     * Recomputes {@link DigitalObject#getPagesCount()} and {@link DigitalObject#getPagesWithAlto()}
+     * Recomputes {@link DigitalObject#getPagesCount()} and
+     * {@link DigitalObject#getPagesWithAlto()}
      * for the given node and all its ancestors, and persists the values.
      * Call after hierarchy or ALTO changes that affect descendant pages.
      */
-    public void refreshPageCountsForAncestors(java.util.UUID uuid) {
+    @Transactional
+    public void refreshPageCountsForAncestors(UUID uuid) {
+        entityManager.flush();
+
         DigitalObject current = digitalObjectRepository.findById(uuid).orElse(null);
+        if (current == null) {
+            return;
+        }
+        // Refresh the node itself (hasSubhierarchy)
+        current.setHasSubhierarchy(digitalObjectRepository.existsNonPageChild(current.getUuid()));
+        digitalObjectRepository.save(current);
+        current = current.getParent();
+
         while (current != null) {
             PageCountStats stats = digitalObjectRepository.getDescendantPageStats(current.getUuid());
             int total = stats != null && stats.getTotalPages() != null ? stats.getTotalPages() : 0;
             int withAlto = stats != null && stats.getPagesWithAlto() != null ? stats.getPagesWithAlto() : 0;
             current.setPagesCount(total);
             current.setPagesWithAlto(withAlto);
+            current.setHasSubhierarchy(digitalObjectRepository.existsNonPageChild(current.getUuid()));
             digitalObjectRepository.save(current);
             current = current.getParent();
         }
     }
 
-    public Batch createGenerateAltoBatch(String pid, BatchPriority priority, Long userId) {
+    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.GENERATE_FOR_HIERARCHY)
                 .pid(pid)
+                .engine(engine)
+                .instance(instance)
                 .priority(priority)
                 .createdBy(userService.getUserById(userId))
                 .build());
@@ -182,10 +213,11 @@ public class ObjectHierarchyService {
         return batch;
     }
 
-    public Batch createFetchFromKrameriusBatch(String pid, BatchPriority priority, Long userId) {
+    public Batch createFetchFromKrameriusBatch(String pid, String instance, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.RETRIEVE_HIERARCHY)
                 .pid(pid)
+                .instance(instance)
                 .priority(priority)
                 .createdBy(userService.getUserById(userId))
                 .build());

@@ -1,0 +1,41 @@
+application:
+  store:
+    path: "${ALTO_EDITOR_STORE_PATH:/tmp/altoEditorTestStore}"
+    pattern: "xx/xx/xx"
+  kramerius-instances:
+    k7-mzk:
+      title: "Kramerius 7 - MZK"
+      url: "https://api.kramerius.mzk.cz/"
+      serviceClientId: "${ALTO_EDITOR_SERVICE_CLIENT_ID:replaceMe}"
+      serviceSecret: "${ALTO_EDITOR_SERVICE_SECRET:replaceMe}"
+  engines:
+    pero-vut:
+      exec: "python"
+      entry: "/usr/local/bin/pero-vut.py"
+      apiKey: "${ALTO_EDITOR_PERO_VUT_KEY:replaceMe}"
+
+spring:
+  datasource:
+    driver-class-name: "${ALTO_EDITOR_JDBC_DRIVER:org.h2.Driver}"
+    url: "${ALTO_EDITOR_JDBC_URL:jdbc:h2:mem:altoEditorTestDb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}"
+    username: "${ALTO_EDITOR_JDBC_USERNAME:altoEditor}"
+    password: "${ALTO_EDITOR_JDBC_PASSWORD:replaceMe}"
+  jpa:
+    hibernate:
+      ddl-auto: "${ALTO_EDITOR_DDL_AUTO:update}"
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        search:
+          backend:
+            directory:
+              root: ${ALTO_EDITOR_INDEX_DIRECTORY:/tmp/hibernate-search-index}
+
+logging:
+  level:
+    org.hibernate.SQL: off
+    org.hibernate.type.descriptor.sql.BasicBinder: off
+    org.hibernate.orm.jdbc.bind: off
+    org.hibernate: warn
+

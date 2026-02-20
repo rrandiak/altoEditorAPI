@@ -20,6 +20,8 @@ public class KrameriusObjectMetadata {
     private final String parentPid;
     private final String rootPid;
 
+    private final Integer pagesCount;
+
     private UUID parsePid(String pid) {
         String[] parts = pid.split(":");
         return UUID.fromString(parts[1]);

@@ -1,6 +1,7 @@
 package cz.inovatika.altoEditor.infrastructure.process.retrieve;
 
 import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Queue;
 
 import org.slf4j.Logger;
@@ -74,16 +75,19 @@ public class RetrieveHierarchyProcess extends BatchProcess {
                 KrameriusObjectMetadata currMetadata = metadataQueue.poll();
 
                 // Save Hierarchy info
-                DigitalObject targetDigitalObject = objectHierarchyService.store(currMetadata);
+                // For target object use fetchAndStore to ensure all hierarchy info is present
+                // and for all subsequent objects use store
+                DigitalObject targetDigitalObject = Objects.equals(currMetadata.getPid(), originPid)
+                        ? objectHierarchyService.fetchAndStore(currMetadata.getPid(), instance)
+                        : objectHierarchyService.store(currMetadata);
 
                 // If PAGE, retrieve ALTO and save AltoVersion
                 // Otherwise, fetch children and add them to queue
                 if (Model.PAGE.isModel(currMetadata.getModel())) {
                     altoVersionService.updateOrCreateKrameriusVersion(
-                        targetDigitalObject.getPid(),
-                        this.krameriusUserId,
-                        krameriusService.getAltoBytes(currMetadata.getPid(), instance)
-                    );
+                            targetDigitalObject.getPid(),
+                            this.krameriusUserId,
+                            krameriusService.getAltoBytes(currMetadata.getPid(), instance));
                 } else {
                     metadataQueue.addAll(krameriusService.getChildrenMetadata(currMetadata.getPid(), instance));
                 }
@@ -93,10 +97,10 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             batchService.setState(batch, BatchState.DONE);
 
         } catch (Exception ex) {
-            LOGGER.error("Batch " + batch.getId() + " failed: " + ex.getMessage(), ex);
+            LOGGER.error("RetrieveHierarchyProcess batch {} failed: {}", batchId, ex.getMessage(), ex);
 
             try {
-                batchService.setFailed(batch, "Batch " + batch.getId() + " failed: " + ex.getMessage());
+                batchService.setFailed(batch, ex.getMessage());
             } catch (Exception e) {
                 LOGGER.error("Failed to set batch as failed: " + e.getMessage(), e);
             }

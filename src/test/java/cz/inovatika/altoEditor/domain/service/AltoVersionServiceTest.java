@@ -275,12 +275,12 @@ class AltoVersionServiceTest {
         }
 
         @Test
-        @DisplayName("throws AltoVersionNotFoundException when no digital object for PID")
+        @DisplayName("throws DigitalObjectNotFoundException when no digital object for PID")
         void throws_whenNoDigitalObject() {
             when(repository.findPendingForUser(any(), eq(USER_ID))).thenReturn(Optional.empty());
             when(repository.findFirstByDigitalObjectUuidOrderByVersionDesc(any())).thenReturn(Optional.empty());
 
-            assertThrows(AltoVersionNotFoundException.class,
+            assertThrows(DigitalObjectNotFoundException.class,
                     () -> service.updateOrCreateVersion(PID, USER_ID, ALTO_CONTENT));
         }
     }

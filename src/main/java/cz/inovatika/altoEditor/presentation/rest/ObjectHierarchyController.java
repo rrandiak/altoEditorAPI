@@ -92,13 +92,15 @@ public class ObjectHierarchyController {
      * @param priority Optional batch priority.
      * @return Created batch DTO.
      */
-    @PostMapping("/{pid}/generate-alto")
+    @PostMapping("/{pid}/generate-alto/{engine}")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> generateAlto(
             @PathVariable String pid,
+            @PathVariable String engine,
+            @RequestParam(required = false) String instance,
             @RequestParam(required = false) BatchPriority priority) {
 
-        BatchDto batch = facade.generateAlto(pid, priority);
+        BatchDto batch = facade.generateAlto(pid, engine, instance, priority);
 
         return ResponseEntity.ok(batch);
     }
@@ -115,9 +117,10 @@ public class ObjectHierarchyController {
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<BatchDto> fetchFromKramerius(
             @PathVariable String pid,
+            @RequestParam(required = false) String instance,
             @RequestParam(required = false) BatchPriority priority) {
 
-        BatchDto batch = facade.fetchFromKramerius(pid, priority);
+        BatchDto batch = facade.fetchFromKramerius(pid, instance, priority);
 
         return ResponseEntity.ok(batch);
     }

@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
+import org.hibernate.search.engine.search.sort.dsl.SortOrder;
+
 import lombok.Data;
 
 /** Search request for curator ALTO version search (all versions). */
@@ -26,4 +28,6 @@ public class AltoVersionSearchRequest {
 
     private int offset = 0;
     private int limit = 10;
+    private String sortBy = "updatedAt";
+    private SortOrder sortOrder = SortOrder.DESC;
 }

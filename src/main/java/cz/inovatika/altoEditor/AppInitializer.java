@@ -45,7 +45,7 @@ public class AppInitializer {
             initStorage();
             initKrameriusUsers();
             initEngineUsers();
-            batchRepository.failAllRunningBatches("Application restarted.");
+            batchRepository.failAllRunningAndPlannedBatches("Application restarted.");
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
         }

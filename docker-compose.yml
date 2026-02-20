@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: altoeditor
+      POSTGRES_USER: altoeditor
+      POSTGRES_PASSWORD: altoeditor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U altoeditor -d altoeditor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  alto-editor:
+    image: alto-editor:1.6.0
+    ports:
+      - "8080:8080"
+    environment:
+      ALTO_EDITOR_JDBC_DRIVER: org.postgresql.Driver
+      ALTO_EDITOR_JDBC_URL: jdbc:postgresql://postgres:5432/altoeditor
+      ALTO_EDITOR_JDBC_USERNAME: altoeditor
+      ALTO_EDITOR_JDBC_PASSWORD: altoeditor
+      ALTO_EDITOR_DDL_AUTO: update
+      ALTO_EDITOR_STORE_PATH: /opt/alto-editor/store
+      ALTO_EDITOR_INDEX_DIRECTORY: /opt/alto-editor/index
+      # Pass through environment variables from the host environment
+      ALTO_EDITOR_SERVICE_CLIENT_ID: ${ALTO_EDITOR_SERVICE_CLIENT_ID}
+      ALTO_EDITOR_SERVICE_SECRET: ${ALTO_EDITOR_SERVICE_SECRET}
+      ALTO_EDITOR_PERO_VUT_KEY: ${ALTO_EDITOR_PERO_VUT_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./application.yml:/opt/alto-editor/application.yml
+      - alto_store:/opt/alto-editor/store
+      - alto_index:/opt/alto-editor/index
+
+volumes:
+  postgres_data:
+  alto_store:
+  alto_index:

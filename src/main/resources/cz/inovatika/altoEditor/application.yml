@@ -12,6 +12,7 @@ application:
     pero-vut:
       exec: "python"
       entry: "/usr/local/bin/pero-vut.py"
+      apiKey: "${ALTO_EDITOR_PERO_VUT_KEY:replaceMe}"
 
 spring:
   datasource:
@@ -37,3 +38,4 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: off
     org.hibernate.orm.jdbc.bind: off
     org.hibernate: warn
+

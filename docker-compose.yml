@@ -16,7 +16,7 @@ services:
       retries: 5
 
   alto-editor:
-    image: alto-editor:1.6.0
+    image: alto-editor:2.0.0-rc1
     ports:
       - "8080:8080"
     environment:

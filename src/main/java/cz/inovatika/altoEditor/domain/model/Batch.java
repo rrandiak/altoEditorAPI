@@ -67,6 +67,12 @@ public class Batch {
     private BatchPriority priority = BatchPriority.MEDIUM;
 
     /**
+     * Target Kramerius instance for this batch.
+     */
+    @Column(name = "instance")
+    private String instance;
+
+    /**
      * PID of the target object for this batch.
      */
     @Column(name = "pid")
@@ -77,12 +83,6 @@ public class Batch {
      */
     @Column(name = "alto_version_id")
     private Integer altoVersionId;
-
-    /**
-     * Target Kramerius instance for this batch.
-     */
-    @Column(name = "instance")
-    private String instance;
 
     /**
      * Target engine for this batch.

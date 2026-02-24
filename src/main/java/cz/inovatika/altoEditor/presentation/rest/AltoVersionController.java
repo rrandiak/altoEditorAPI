@@ -23,8 +23,10 @@ import cz.inovatika.altoEditor.presentation.dto.request.NewAltoVersionRequest;
 import lombok.RequiredArgsConstructor;
 
 /**
- * REST API for ALTO versions: search, get content by page (PID) or version, OCR, images,
- * create/update versions, state transitions (accept/reject/archive), and per-page ALTO generation.
+ * REST API for ALTO versions: search, get content by page (PID) or version,
+ * OCR, images,
+ * create/update versions, state transitions (accept/reject/archive), and
+ * per-page ALTO generation.
  */
 @RestController
 @RequestMapping("/api/alto-versions")
@@ -36,8 +38,10 @@ public class AltoVersionController {
     /**
      * Search all ALTO versions with optional filters and pagination.
      *
-     * @param request Search criteria (users, instance, PIDs, title, date range, states)
-     *                and pagination (offset, limit) via {@link AltoVersionSearchRequest}.
+     * @param request Search criteria (users, instance, PIDs, title, date range,
+     *                states)
+     *                and pagination (offset, limit) via
+     *                {@link AltoVersionSearchRequest}.
      * @return Paginated list of ALTO versions matching the criteria.
      */
     @GetMapping("/search")
@@ -51,10 +55,13 @@ public class AltoVersionController {
     }
 
     /**
-     * Search ALTO versions related to the current user with optional filters and pagination.
-     * Returns only ALTO versions linked to the authenticated user or in {@code ACTIVE} state.
+     * Search ALTO versions related to the current user with optional filters and
+     * pagination.
+     * Returns only ALTO versions linked to the authenticated user or in
+     * {@code ACTIVE} state.
      *
-     * @param request Search criteria and pagination (offset, limit) via {@link AltoVersionSearchRelatedRequest}.
+     * @param request Search criteria and pagination (offset, limit) via
+     *                {@link AltoVersionSearchRelatedRequest}.
      * @return Paginated list of matching ALTO versions.
      */
     @GetMapping("/search/related")
@@ -81,7 +88,7 @@ public class AltoVersionController {
      * If instance ID is not provided and a new ALTO needs to be fetched,
      * default Kramerius instance will be used.
      * 
-     * @param pid        The identifier of the ALTO version.
+     * @param pid      The identifier of the ALTO version.
      * @param instance The instance ID of the ALTO version (optional).
      * 
      * @return The ALTO content of the ALTO version.
@@ -150,7 +157,7 @@ public class AltoVersionController {
     /**
      * Get image for an ALTO version.
      * 
-     * @param pid        The identifier of the ALTO version.
+     * @param pid      The identifier of the ALTO version.
      * @param instance The instance ID of the ALTO version (optional).
      * 
      * @return The image bytes of the digital object.

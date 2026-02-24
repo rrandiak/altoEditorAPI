@@ -64,7 +64,7 @@ public class AltoVersion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @DocumentId
-    private Long id;
+    private Integer id;
 
     /**
      * Target UUID of the digital object in Kramerius.

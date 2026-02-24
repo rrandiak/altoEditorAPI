@@ -83,6 +83,26 @@ public class ObjectHierarchyController {
 
         return ResponseEntity.ok(children);
     }
+    
+    /**
+     * Start a batch job to fetch the object hierarchy from Kramerius and store it locally.
+     * The batch type is {@code RETRIEVE_HIERARCHY}.
+     *
+     * @param pid     Root or leaf PID to start from (e.g. page or monograph UUID).
+     * @param priority Optional batch priority.
+     * @return Created batch DTO.
+     */
+    @PostMapping("/{pid}/fetch-from-kramerius")
+    @PreAuthorize("hasAuthority('CURATOR')")
+    public ResponseEntity<BatchDto> fetchFromKramerius(
+            @PathVariable String pid,
+            @RequestParam(required = false) String instance,
+            @RequestParam(required = false) BatchPriority priority) {
+
+        BatchDto batch = facade.fetchFromKramerius(pid, instance, priority);
+
+        return ResponseEntity.ok(batch);
+    }
 
     /**
      * Start a batch job to generate ALTO for the hierarchy rooted at the given PID.
@@ -104,23 +124,25 @@ public class ObjectHierarchyController {
 
         return ResponseEntity.ok(batch);
     }
-    
+
     /**
-     * Start a batch job to fetch the object hierarchy from Kramerius and store it locally.
-     * The batch type is {@code RETRIEVE_HIERARCHY}.
+     * Start a batch that accepts the given engine's latest ALTO version for every
+     * page in the hierarchy given by provided PID. Only that engine's versions
+     * are promoted to ACTIVE; other versions are not affected.
      *
-     * @param pid     Root or leaf PID to start from (e.g. page or monograph UUID).
+     * @param pid     PID of the document hierarchy (e.g. monograph or periodical).
+     * @param engine  Engine whose latest ALTO versions will be accepted in that hierarchy.
      * @param priority Optional batch priority.
-     * @return Created batch DTO.
+     * @return HTTP 200 OK when the batch is queued.
      */
-    @PostMapping("/{pid}/fetch-from-kramerius")
+    @PostMapping("/{pid}/accept-engine-versions/{engine}")
     @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<BatchDto> fetchFromKramerius(
+    public ResponseEntity<BatchDto> acceptEngineVersions(
             @PathVariable String pid,
-            @RequestParam(required = false) String instance,
+            @PathVariable String engine,
             @RequestParam(required = false) BatchPriority priority) {
 
-        BatchDto batch = facade.fetchFromKramerius(pid, instance, priority);
+        BatchDto batch = facade.acceptEngineVersions(pid, engine, priority);
 
         return ResponseEntity.ok(batch);
     }

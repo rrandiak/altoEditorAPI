@@ -200,6 +200,18 @@ public class ObjectHierarchyService {
         }
     }
 
+    public Batch createFetchFromKrameriusBatch(String pid, String instance, BatchPriority priority, Long userId) {
+        Batch batch = batchRepository.save(Batch.builder()
+                .type(BatchType.RETRIEVE_HIERARCHY)
+                .pid(pid)
+                .instance(instance)
+                .priority(priority)
+                .createdBy(userService.getUserById(userId))
+                .build());
+
+        return batch;
+    }
+
     public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.GENERATE_FOR_HIERARCHY)
@@ -213,11 +225,11 @@ public class ObjectHierarchyService {
         return batch;
     }
 
-    public Batch createFetchFromKrameriusBatch(String pid, String instance, BatchPriority priority, Long userId) {
+    public Batch createAcceptEngineVersionsBatch(String pid, String engine, BatchPriority priority, Long userId) {
         Batch batch = batchRepository.save(Batch.builder()
-                .type(BatchType.RETRIEVE_HIERARCHY)
+                .type(BatchType.ACCEPT_ENGINE_VERSIONS)
                 .pid(pid)
-                .instance(instance)
+                .engine(engine)
                 .priority(priority)
                 .createdBy(userService.getUserById(userId))
                 .build());

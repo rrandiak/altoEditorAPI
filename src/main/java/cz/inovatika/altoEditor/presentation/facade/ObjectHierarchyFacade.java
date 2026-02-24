@@ -5,6 +5,7 @@ import java.util.List;
 import org.hibernate.search.engine.search.query.SearchResult;
 import org.springframework.stereotype.Component;
 
+import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.model.Batch;
@@ -12,6 +13,7 @@ import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.service.ObjectHierarchyService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
+import cz.inovatika.altoEditor.infrastructure.process.accept.AcceptEngineVersionsProcessFactory;
 import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.infrastructure.process.retrieve.RetrieveHierarchyProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.ObjectHierarchySearchRequest;
@@ -43,15 +45,19 @@ public class ObjectHierarchyFacade {
 
     private final KrameriusProperties krameriusConfig;
 
+    private final EnginesProperties enginesProperties;
+
     private final UserContextService userContext;
 
     private final BatchMapper batchMapper;
 
     private final ProcessDispatcher processDispatcher;
 
+    private final RetrieveHierarchyProcessFactory retrieveHierarchyProcessFactory;
+
     private final AltoOcrGeneratorProcessFactory altoGeneratorProcessFactory;
 
-    private final RetrieveHierarchyProcessFactory retrieveHierarchyProcessFactory;
+    private final AcceptEngineVersionsProcessFactory acceptEngineVersionsProcessFactory;
 
     /** Search hierarchy nodes (pagesCount/pagesWithAlto from persisted entity). */
     public SearchResultsDto<HierarchySearchDto> search(ObjectHierarchySearchRequest request) {
@@ -96,8 +102,22 @@ public class ObjectHierarchyFacade {
                 .toList();
     }
 
+    /** Start batch to fetch hierarchy from Kramerius and store locally. */
+    public BatchDto fetchFromKramerius(String pid, String instance, BatchPriority priority) {
+        String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
+
+        Batch batch = service.createFetchFromKrameriusBatch(pid, finalInstance, priority, userContext.getUserId());
+
+        processDispatcher.submit(retrieveHierarchyProcessFactory.create(batch));
+
+        return batchMapper.toDto(batch);
+    }
+
     /** Start batch to generate ALTO for hierarchy rooted at PID. */
     public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
+        // Validate engine
+        enginesProperties.getEngineConfig(engine);
+
         String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
 
         Batch batch = service.createGenerateAltoBatch(pid, engine, finalInstance, priority, userContext.getUserId());
@@ -107,13 +127,14 @@ public class ObjectHierarchyFacade {
         return batchMapper.toDto(batch);
     }
 
-    /** Start batch to fetch hierarchy from Kramerius and store locally. */
-    public BatchDto fetchFromKramerius(String pid, String instance, BatchPriority priority) {
-        String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
+    /** Start batch to accept the given engine's latest ALTO version for every page in the hierarchy given by provided PID. */
+    public BatchDto acceptEngineVersions(String pid, String engine, BatchPriority priority) {
+        // Validate engine
+        enginesProperties.getEngineConfig(engine);
 
-        Batch batch = service.createFetchFromKrameriusBatch(pid, finalInstance, priority, userContext.getUserId());
+        Batch batch = service.createAcceptEngineVersionsBatch(pid, engine, priority, userContext.getUserId());
 
-        processDispatcher.submit(retrieveHierarchyProcessFactory.create(batch));
+        processDispatcher.submit(acceptEngineVersionsProcessFactory.create(batch));
 
         return batchMapper.toDto(batch);
     }

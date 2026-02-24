@@ -294,7 +294,7 @@ class AltoVersionServiceTest {
         void returnsOcrText() {
             int versionId = 42;
             DigitalObject dobj = DigitalObject.builder().pid(PID).build();
-            AltoVersion av = AltoVersion.builder().id(Long.valueOf(versionId)).digitalObject(dobj).version(VERSION).user(USER).build();
+            AltoVersion av = AltoVersion.builder().id(versionId).digitalObject(dobj).version(VERSION).user(USER).build();
             when(repository.findById(versionId)).thenReturn(Optional.of(av));
             when(akubraService.retrieveDsBinaryContent(eq(PID), eq(Datastream.ALTO), eq(VERSION)))
                     .thenReturn(ALTO_CONTENT);
@@ -379,8 +379,8 @@ class AltoVersionServiceTest {
         @DisplayName("sets version to ACTIVE and archives other ACTIVE versions for same PID")
         void setsActiveAndArchivesOthers() {
             DigitalObject dobj = DigitalObject.builder().pid(PID).build();
-            AltoVersion toAccept = AltoVersion.builder().id(1L).digitalObject(dobj).version(2).state(AltoVersionState.PENDING).build();
-            AltoVersion otherActive = AltoVersion.builder().id(2L).digitalObject(dobj).version(1).state(AltoVersionState.ACTIVE).build();
+            AltoVersion toAccept = AltoVersion.builder().id(1).digitalObject(dobj).version(2).state(AltoVersionState.PENDING).build();
+            AltoVersion otherActive = AltoVersion.builder().id(2).digitalObject(dobj).version(1).state(AltoVersionState.ACTIVE).build();
 
             when(repository.findById(1)).thenReturn(Optional.of(toAccept));
             when(repository.findAllByDigitalObjectUuid(dobj.getUuid())).thenReturn(java.util.List.of(toAccept, otherActive));
@@ -402,7 +402,7 @@ class AltoVersionServiceTest {
         @DisplayName("sets PENDING version to REJECTED")
         void setsRejected_whenPending() {
             DigitalObject dobj = DigitalObject.builder().pid(PID).build();
-            AltoVersion pending = AltoVersion.builder().id(1L).state(AltoVersionState.PENDING).digitalObject(dobj).build();
+            AltoVersion pending = AltoVersion.builder().id(1).state(AltoVersionState.PENDING).digitalObject(dobj).build();
             when(repository.findById(1)).thenReturn(Optional.of(pending));
             when(repository.save(any(AltoVersion.class))).thenReturn(pending);
 
@@ -415,7 +415,7 @@ class AltoVersionServiceTest {
         @Test
         @DisplayName("throws IllegalStateException when version is not PENDING")
         void throws_whenNotPending() {
-            AltoVersion active = AltoVersion.builder().id(1L).state(AltoVersionState.ACTIVE).build();
+            AltoVersion active = AltoVersion.builder().id(1).state(AltoVersionState.ACTIVE).build();
             when(repository.findById(1)).thenReturn(Optional.of(active));
 
             assertThrows(IllegalStateException.class, () -> service.reject(1));
@@ -438,7 +438,7 @@ class AltoVersionServiceTest {
         @DisplayName("sets PENDING version to ARCHIVED")
         void setsArchived_whenPending() {
             DigitalObject dobj = DigitalObject.builder().pid(PID).build();
-            AltoVersion pending = AltoVersion.builder().id(1L).state(AltoVersionState.PENDING).digitalObject(dobj).build();
+            AltoVersion pending = AltoVersion.builder().id(1).state(AltoVersionState.PENDING).digitalObject(dobj).build();
             when(repository.findById(1)).thenReturn(Optional.of(pending));
             when(repository.save(any(AltoVersion.class))).thenReturn(pending);
 
@@ -451,7 +451,7 @@ class AltoVersionServiceTest {
         @Test
         @DisplayName("throws IllegalStateException when version is not PENDING")
         void throws_whenNotPending() {
-            AltoVersion active = AltoVersion.builder().id(1L).state(AltoVersionState.ACTIVE).build();
+            AltoVersion active = AltoVersion.builder().id(1).state(AltoVersionState.ACTIVE).build();
             when(repository.findById(1)).thenReturn(Optional.of(active));
 
             assertThrows(IllegalStateException.class, () -> service.archive(1));
@@ -467,7 +467,7 @@ class AltoVersionServiceTest {
         void returnsAltoAndOcrContent() {
             int versionId = 1;
             DigitalObject dobj = DigitalObject.builder().pid(PID).build();
-            AltoVersion av = AltoVersion.builder().id(Long.valueOf(versionId)).digitalObject(dobj).version(VERSION).user(USER).build();
+            AltoVersion av = AltoVersion.builder().id(versionId).digitalObject(dobj).version(VERSION).user(USER).build();
             when(repository.findById(versionId)).thenReturn(Optional.of(av));
             when(akubraService.retrieveDsBinaryContent(eq(PID), eq(Datastream.ALTO), eq(VERSION)))
                     .thenReturn(ALTO_CONTENT);

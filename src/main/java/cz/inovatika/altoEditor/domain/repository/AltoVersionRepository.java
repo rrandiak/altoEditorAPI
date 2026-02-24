@@ -71,6 +71,25 @@ public interface AltoVersionRepository
     Optional<AltoVersion> findEngineUpdateCandidate(UUID uuid, Long userId);
 
     /**
+     * PENDING AltoVersion IDs owned by the given user (engine) whose page is a descendant
+     * of the hierarchy node {@code rootUuid}. Uses a recursive CTE over object_hierarchy.
+     */
+    @Query(value = """
+            WITH RECURSIVE descendants (uuid) AS (
+                SELECT uuid FROM object_hierarchy WHERE uuid = :uuid
+                UNION ALL
+                SELECT oh.uuid FROM object_hierarchy oh
+                INNER JOIN descendants d ON oh.parent_uuid = d.uuid
+            )
+            SELECT av.id FROM alto_versions av
+            INNER JOIN descendants d ON av.uuid = d.uuid
+            WHERE av.state = AltoVersionState.PENDING AND av.user.id = :userId
+            """, nativeQuery = true)
+    List<Integer> findPendingVersionIdsByUserInHierarchy(
+            @Param("rootUuid") UUID uuid,
+            @Param("userId") Long userId);
+
+    /**
      * Find digital object by UUID and version
      */
     Optional<AltoVersion> findByDigitalObjectUuidAndVersion(UUID uuid, Integer version);

@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.xml.sax.SAXException;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 @Service
@@ -43,6 +44,8 @@ public class AltoXmlService {
 
     /**
      * Parses ALTO XML and extracts TEXT_OCR text.
+     * Namespace-aware: resolves elements/attributes by local name so ALTO with
+     * default namespace (e.g. xmlns="http://www.loc.gov/standards/alto/ns-v2#") works unchanged.
      *
      * @param alto the ALTO XML content
      * @return extracted text
@@ -50,15 +53,38 @@ public class AltoXmlService {
     public String convertAltoToOcr(byte[] alto) {
         try {
             JsonNode root = xmlMapper.readTree(alto);
-            JsonNode printSpace = root.path("alto")
-                    .path("Layout")
-                    .path("Page")
-                    .path("PrintSpace");
+            JsonNode altoNode = childByLocalName(root, "alto");
+            if (altoNode.isMissingNode()) {
+                altoNode = root;
+            }
+            JsonNode printSpace = childByLocalName(
+                    childByLocalName(childByLocalName(altoNode, "Layout"), "Page"),
+                    "PrintSpace");
 
             return processPrintSpace(printSpace).trim();
         } catch (IOException e) {
             throw new RuntimeException("Failed to parse ALTO XML", e);
         }
+    }
+
+    /** Resolves child by local name (Jackson uses keys like "{uri}localName" for namespaced elements). */
+    private static JsonNode childByLocalName(JsonNode parent, String localName) {
+        if (parent == null || parent.isMissingNode()) {
+            return MissingNode.getInstance();
+        }
+        JsonNode direct = parent.path(localName);
+        if (!direct.isMissingNode()) {
+            return direct;
+        }
+        Iterator<String> names = parent.fieldNames();
+        while (names.hasNext()) {
+            String key = names.next();
+            String keyLocal = key.contains("}") ? key.substring(key.indexOf('}') + 1) : key;
+            if (localName.equals(keyLocal)) {
+                return parent.get(key);
+            }
+        }
+        return MissingNode.getInstance();
     }
 
     private String processPrintSpace(JsonNode printSpaceNode) {
@@ -95,7 +121,7 @@ public class AltoXmlService {
         Iterator<JsonNode> strings = getAsArray(textLineNode, "String");
         while (strings.hasNext()) {
             JsonNode stringNode = strings.next();
-            String content = transformValue(stringNode.path("CONTENT"));
+            String content = transformValue(childByLocalName(stringNode, "CONTENT"));
             if (content != null && !content.isBlank()) {
                 sb.append(content).append(" ");
             }
@@ -105,7 +131,7 @@ public class AltoXmlService {
     }
 
     private Iterator<JsonNode> getAsArray(JsonNode parent, String fieldName) {
-        JsonNode node = parent.path(fieldName);
+        JsonNode node = childByLocalName(parent, fieldName);
         if (node.isArray()) {
             return node.elements();
         } else if (!node.isMissingNode()) {

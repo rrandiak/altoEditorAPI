@@ -164,7 +164,7 @@ public class AltoVersion {
     }
 
     @Transient
-    @GenericField(name = "pageIndex")
+    @GenericField(name = "pageIndex", sortable = Sortable.YES)
     @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW, derivedFrom = {
             @ObjectPath({
                     @PropertyValue(propertyName = "digitalObject"),

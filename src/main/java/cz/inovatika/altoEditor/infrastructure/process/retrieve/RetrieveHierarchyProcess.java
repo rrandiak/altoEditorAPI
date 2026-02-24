@@ -74,6 +74,17 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             while (!metadataQueue.isEmpty()) {
                 KrameriusObjectMetadata currMetadata = metadataQueue.poll();
 
+                Model model = Model.fromModelName(currMetadata.getModel());
+                // Ignore if model is null or should ignore for hierarchy retrieval
+                if (model == null || model.shouldIgnoreForHierarchyRetrieval()) {
+                    continue;
+                }
+                // If collection, add all children to queue, but don't save it to database
+                if (Model.COLLECTION.isModel(currMetadata.getModel())) {
+                    metadataQueue.addAll(krameriusService.getChildrenMetadata(currMetadata.getPid(), instance));
+                    continue;
+                }
+
                 // Save Hierarchy info
                 // For target object use fetchAndStore to ensure all hierarchy info is present
                 // and for all subsequent objects use store

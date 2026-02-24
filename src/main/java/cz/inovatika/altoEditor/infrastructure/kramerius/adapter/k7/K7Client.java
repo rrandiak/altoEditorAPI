@@ -146,7 +146,8 @@ public class K7Client implements KrameriusClient {
         }
     }
 
-    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows, int start, String sort) {
+    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows, int start,
+            String sort) {
         URI uri = UriComponentsBuilder
                 .fromUriString(this.config.buildEndpoint("/search/api/client/v7.0/search"))
                 .queryParam("q", query)
@@ -166,6 +167,18 @@ public class K7Client implements KrameriusClient {
                         HttpMethod.GET,
                         createJsonRequestEntity(token),
                         responseType));
+
+        if (response.getStatusCode() != HttpStatus.OK) {
+            String bodyDetail = "";
+            if (response.getBody() != null) {
+                bodyDetail = response.getBody().toString();
+            }
+            throw new RuntimeException("Failed to search in Solr: " + response.getStatusCode() + " " + bodyDetail);
+        }
+
+        if (response.getBody() == null) {
+            throw new RuntimeException("Failed to search in Solr: no response body");
+        }
 
         return response.getBody();
     }
@@ -202,9 +215,11 @@ public class K7Client implements KrameriusClient {
     }
 
     private KrameriusObjectMetadata fetchObjectMetadata(String pid) {
-        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("pid:\"" + pid + "\"", METADATA_FL, 1);
+        SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
+                "pid:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
+                METADATA_FL, 1);
 
-        if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
+        if (solrResponse.getResponse().getDocs().isEmpty()) {
             throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
         }
 
@@ -222,12 +237,28 @@ public class K7Client implements KrameriusClient {
         List<KrameriusObjectMetadata> children = new ArrayList<>();
 
         do {
-            solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\"", returnFields,
+            solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
+                    returnFields,
                     CHILDREN_FETCH_ROWS, start, "rels_ext_index.sort asc");
 
-            if (solrResponse == null || solrResponse.getResponse().getDocs().isEmpty()) {
-                throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
-            }
+            children.addAll(
+                    solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
+
+            start += CHILDREN_FETCH_ROWS;
+        } while (solrResponse.getResponse().getNumFound() > start + CHILDREN_FETCH_ROWS);
+
+        return children;
+    }
+
+    private List<KrameriusObjectMetadata> getCollectionChildrenMetadata(String pid) {
+        SolrResponse<K7ObjectMetadataDoc> solrResponse;
+        int start = 0;
+        List<KrameriusObjectMetadata> children = new ArrayList<>();
+
+        do {
+            solrResponse = searchInSolr("in_collections.direct:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
+                    METADATA_FL, CHILDREN_FETCH_ROWS,
+                    start, "created desc");
 
             children.addAll(
                     solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
@@ -240,16 +271,18 @@ public class K7Client implements KrameriusClient {
 
     @Override
     public List<KrameriusObjectMetadata> getChildrenMetadata(String pid) {
+        KrameriusObjectMetadata metadata = getObjectMetadata(pid);
+
+        if (Model.COLLECTION.isModel(metadata.getModel())) {
+            return getCollectionChildrenMetadata(pid);
+        }
+
         return getChildrenMetadata(pid, METADATA_FL);
     }
 
     @Override
     public int getPagesCount(String pid) {
         KrameriusObjectMetadata metadata = getObjectMetadata(pid);
-
-        if (metadata == null) {
-            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
-        }
 
         if (metadata.getPagesCount() != null) {
             return metadata.getPagesCount();
@@ -259,12 +292,16 @@ public class K7Client implements KrameriusClient {
             return 0;
         }
 
-        if (metadata.getLevel() == 0) {
-            SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("root.pid:\"" + pid + "\" AND model:page", "pid", 0);
+        if (Model.COLLECTION.isModel(metadata.getModel())) {
+            SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
+                    "in_collections.direct:\"" + pid + "\" AND model:page", "pid", 0);
 
-            if (solrResponse == null) {
-                throw new RuntimeException("Failed to get pages count for root PID " + pid);
-            }
+            return solrResponse.getResponse().getNumFound();
+        }
+
+        if (metadata.getLevel() == 0) {
+            SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr("root.pid:\"" + pid + "\" AND model:page",
+                    "pid", 0);
 
             return solrResponse.getResponse().getNumFound();
         }
@@ -292,22 +329,16 @@ public class K7Client implements KrameriusClient {
     public int getChildrenCount(String pid) {
         KrameriusObjectMetadata metadata = getObjectMetadata(pid);
 
-        if (metadata == null) {
-            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
-        }
-
         if (Model.PAGE.isModel(metadata.getModel())) {
             return 0;
         }
 
         SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
-                "own_parent.pid:\"" + pid + "\"",
+                (Model.COLLECTION.isModel(metadata.getModel())
+                        ? "in_collections.direct:\"" + pid + "\""
+                        : "own_parent.pid:\"" + pid + "\"") + " AND " + Model.getShouldIgnoreQueryPart(),
                 "pid",
                 0);
-
-        if (solrResponse == null) {
-            throw new RuntimeException("Object with PID " + pid + " not found in Kramerius");
-        }
 
         return solrResponse.getResponse().getNumFound();
     }

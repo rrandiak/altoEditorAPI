@@ -5,9 +5,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Slf4j
 public class K7ObjectMetadataDoc {
 
     @JsonProperty("pid")
@@ -15,7 +17,7 @@ public class K7ObjectMetadataDoc {
 
     @JsonProperty("model")
     private String model;
-    
+
     @JsonProperty("title.search")
     private String title;
 
@@ -24,7 +26,7 @@ public class K7ObjectMetadataDoc {
 
     @JsonProperty("rels_ext_index.sort")
     private Integer indexInParent;
-    
+
     @JsonProperty("own_parent.pid")
     private String parentPid;
 
@@ -34,10 +36,14 @@ public class K7ObjectMetadataDoc {
     @JsonProperty("count_page")
     private Integer pagesCount;
 
+    @JsonProperty("date.str")
+    private String dateStr;
+
     public KrameriusObjectMetadata toMetadata() {
+        log.info("title: {}, dateStr: {}", title, dateStr);
         return KrameriusObjectMetadata.builder()
                 .pid(pid)
-                .title(title)
+                .title(title == null || title.isEmpty() ? dateStr : title)
                 .model(model)
                 .level(level)
                 .indexInParent(indexInParent)

@@ -45,7 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class K7Client implements KrameriusClient {
 
-    private static final String METADATA_FL = "pid,model,title.search,level,own_parent.pid,root.pid,rels_ext_index.sort,count_page";
+    private static final String METADATA_FL = "pid,model,title.search,date.str,level,own_parent.pid,root.pid,rels_ext_index.sort,count_page";
     private static final int METADATA_CACHE_EXPIRE_TIME = 10;
     private static final int METADATA_CACHE_MAX_SIZE = 1000;
     private static final int CHILDREN_FETCH_ROWS = 300;

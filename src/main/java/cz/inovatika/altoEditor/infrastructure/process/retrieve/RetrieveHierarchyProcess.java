@@ -58,6 +58,7 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             // --- START PROCESSING ---
             // Do all initializations in this block
             batchService.setState(batch, BatchState.RUNNING);
+            batchService.setProcessedItemCount(batch, 0);
 
             String originPid = batch.getPid();
             KrameriusObjectMetadata targetMetadata = krameriusService.getObjectMetadata(originPid, instance);
@@ -68,6 +69,8 @@ public class RetrieveHierarchyProcess extends BatchProcess {
                                 + ".");
                 return;
             }
+
+            batchService.setEstimatedItemCount(batch, targetMetadata.getPagesCount());
 
             metadataQueue.add(targetMetadata);
 
@@ -99,6 +102,8 @@ public class RetrieveHierarchyProcess extends BatchProcess {
                             targetDigitalObject.getPid(),
                             this.krameriusUserId,
                             krameriusService.getAltoBytes(currMetadata.getPid(), instance));
+                
+                    batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + 1);
                 } else {
                     metadataQueue.addAll(krameriusService.getChildrenMetadata(currMetadata.getPid(), instance));
                 }

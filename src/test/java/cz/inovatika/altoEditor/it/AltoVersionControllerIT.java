@@ -119,7 +119,7 @@ class AltoVersionControllerIT {
     private RequestPostProcessor userProfileWithRoles(List<Role> roles) {
         Long userId = testUser.getId();
         String username = testUser.getUsername();
-        UserProfile profile = new UserProfile("dummy-token", userId, null, username, roles);
+        UserProfile profile = new UserProfile("dummy-token", "dummy-instance", userId, null, username, roles);
         List<SimpleGrantedAuthority> authorities = roles.stream()
                 .map(r -> new SimpleGrantedAuthority(r.toString()))
                 .toList();

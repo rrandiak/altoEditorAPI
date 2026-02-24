@@ -32,6 +32,7 @@ public class KrameriusService {
             KrameriusUser user = getClient(instance).getUser(token);
 
             if (user != null) {
+                user.setInstance(instance);
                 return user;
             }
         }

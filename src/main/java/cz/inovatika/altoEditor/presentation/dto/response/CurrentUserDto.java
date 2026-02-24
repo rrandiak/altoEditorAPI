@@ -17,4 +17,5 @@ public class CurrentUserDto {
     private Long id;
     private String username;
     private List<Role> roles;
+    private String instance;
 }

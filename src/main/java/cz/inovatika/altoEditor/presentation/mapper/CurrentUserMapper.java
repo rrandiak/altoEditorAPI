@@ -12,10 +12,12 @@ import cz.inovatika.altoEditor.presentation.security.UserProfile;
 public interface CurrentUserMapper {
 
     @Mapping(target = "id", source = "userId")
+    @Mapping(target = "instance", source = "userProfile.instance")
     CurrentUserDto toDto(UserProfile userProfile);
 
     @Mapping(target = "id", source = "user.id")
     @Mapping(target = "username", source = "user.username")
     @Mapping(target = "roles", source = "userProfile.roles")
+    @Mapping(target = "instance", source = "userProfile.instance")
     CurrentUserDto toDto(User user, UserProfile userProfile);
 }

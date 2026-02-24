@@ -117,7 +117,7 @@ class UserControllerIT {
     }
 
     private RequestPostProcessor userProfile(Long userId, String uid, String username, List<Role> roles) {
-        UserProfile profile = new UserProfile("dummy-token", userId, uid, username, roles);
+        UserProfile profile = new UserProfile("dummy-token", "dummy-instance", userId, uid, username, roles);
         List<SimpleGrantedAuthority> authorities = roles.stream()
                 .map(r -> new SimpleGrantedAuthority(r.toString()))
                 .toList();

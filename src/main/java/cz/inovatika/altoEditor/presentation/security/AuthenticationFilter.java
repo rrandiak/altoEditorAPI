@@ -63,6 +63,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
 
             UserProfile profile = new UserProfile(
                     token,
+                    user.getInstance(),
                     userId,
                     user.getUid(),
                     user.getUsername(),

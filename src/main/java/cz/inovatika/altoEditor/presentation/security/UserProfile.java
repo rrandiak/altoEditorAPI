@@ -12,6 +12,7 @@ import lombok.Getter;
 public class UserProfile {
     
     private String token;
+    private String instance;
     private Long userId;
     private String uid;
     private String username;

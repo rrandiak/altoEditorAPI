@@ -46,9 +46,11 @@ import lombok.extern.slf4j.Slf4j;
 public class K7Client implements KrameriusClient {
 
     private static final String METADATA_FL = "pid,model,title.search,date.str,level,own_parent.pid,root.pid,rels_ext_index.sort,count_page";
-    private static final int METADATA_CACHE_EXPIRE_TIME = 10;
-    private static final int METADATA_CACHE_MAX_SIZE = 1000;
+    private static final int SOLR_CACHE_EXPIRE_MINUTES = 10;
+    private static final int SOLR_CACHE_MAX_SIZE = 2000;
     private static final int CHILDREN_FETCH_ROWS = 300;
+
+    private record SolrSearchKey(String query, String returnFields, int rows, int start, String sort) {}
 
     private final KrameriusProperties.KrameriusInstance config;
 
@@ -70,10 +72,10 @@ public class K7Client implements KrameriusClient {
      */
     private volatile String serviceToken;
 
-    private final LoadingCache<String, KrameriusObjectMetadata> metadataCache = Caffeine.newBuilder()
-            .expireAfterWrite(METADATA_CACHE_EXPIRE_TIME, TimeUnit.MINUTES)
-            .maximumSize(METADATA_CACHE_MAX_SIZE)
-            .build(this::fetchObjectMetadata);
+    private final LoadingCache<SolrSearchKey, SolrResponse<K7ObjectMetadataDoc>> solrCache = Caffeine.newBuilder()
+            .expireAfterWrite(SOLR_CACHE_EXPIRE_MINUTES, TimeUnit.MINUTES)
+            .maximumSize(SOLR_CACHE_MAX_SIZE)
+            .build(this::fetchSearchInSolr);
 
     private HttpEntity<String> createJsonRequestEntity(String token) {
         HttpHeaders headers = new HttpHeaders();
@@ -146,17 +148,17 @@ public class K7Client implements KrameriusClient {
         }
     }
 
-    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows, int start,
-            String sort) {
-        URI uri = UriComponentsBuilder
+    private SolrResponse<K7ObjectMetadataDoc> fetchSearchInSolr(SolrSearchKey key) {
+        var builder = UriComponentsBuilder
                 .fromUriString(this.config.buildEndpoint("/search/api/client/v7.0/search"))
-                .queryParam("q", query)
-                .queryParam("fl", returnFields)
-                .queryParam("rows", rows)
-                .queryParam("start", start)
-                .queryParam("sort", sort)
-                .build()
-                .toUri();
+                .queryParam("q", key.query())
+                .queryParam("fl", key.returnFields())
+                .queryParam("rows", key.rows())
+                .queryParam("start", key.start());
+        if (key.sort() != null && !key.sort().isBlank()) {
+            builder.queryParam("sort", key.sort());
+        }
+        URI uri = builder.build().toUri();
 
         ParameterizedTypeReference<SolrResponse<K7ObjectMetadataDoc>> responseType = new ParameterizedTypeReference<>() {
         };
@@ -169,10 +171,7 @@ public class K7Client implements KrameriusClient {
                         responseType));
 
         if (response.getStatusCode() != HttpStatus.OK) {
-            String bodyDetail = "";
-            if (response.getBody() != null) {
-                bodyDetail = response.getBody().toString();
-            }
+            String bodyDetail = response.getBody() != null ? response.getBody().toString() : "";
             throw new RuntimeException("Failed to search in Solr: " + response.getStatusCode() + " " + bodyDetail);
         }
 
@@ -181,6 +180,11 @@ public class K7Client implements KrameriusClient {
         }
 
         return response.getBody();
+    }
+
+    private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows, int start,
+            String sort) {
+        return solrCache.get(new SolrSearchKey(query, returnFields, rows, start, sort));
     }
 
     private SolrResponse<K7ObjectMetadataDoc> searchInSolr(String query, String returnFields, int rows) {
@@ -214,7 +218,8 @@ public class K7Client implements KrameriusClient {
         return response.getStatusCode().is2xxSuccessful();
     }
 
-    private KrameriusObjectMetadata fetchObjectMetadata(String pid) {
+    @Override
+    public KrameriusObjectMetadata getObjectMetadata(String pid) {
         SolrResponse<K7ObjectMetadataDoc> solrResponse = searchInSolr(
                 "pid:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
                 METADATA_FL, 1);
@@ -224,11 +229,6 @@ public class K7Client implements KrameriusClient {
         }
 
         return solrResponse.getResponse().getDocs().get(0).toMetadata();
-    }
-
-    @Override
-    public KrameriusObjectMetadata getObjectMetadata(String pid) {
-        return metadataCache.get(pid);
     }
 
     private List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String returnFields) {

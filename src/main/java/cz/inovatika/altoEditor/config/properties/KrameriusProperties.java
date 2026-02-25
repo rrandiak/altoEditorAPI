@@ -38,6 +38,12 @@ public class KrameriusProperties {
         private Integer connectTimeout = 10000;
         @NotNull
         private Integer readTimeout = 30000;
+        @NotNull
+        private Integer maxConnections = 32;
+        @NotNull
+        private Integer maxConnectionIdleTime = 30000;
+        @NotNull
+        private Integer pendingConnectionAcquireTimeout = 5000;
 
         public String trimmedUrl() {
             return url != null ? url.replaceAll("/+$", "") : null;

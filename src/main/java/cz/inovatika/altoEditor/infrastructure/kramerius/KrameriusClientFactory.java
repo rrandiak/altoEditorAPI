@@ -1,44 +1,55 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius;
 
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-
 import java.time.Duration;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.exception.KrameriusInstanceNotConfiguredException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.K7Client;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUserFactory;
+import io.netty.channel.ChannelOption;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import reactor.netty.resources.ConnectionProvider;
+import reactor.netty.http.client.HttpClient;
 
 @Component
 @RequiredArgsConstructor
 public class KrameriusClientFactory {
 
     private final KrameriusProperties config;
-
-    private final RestTemplateBuilder restTemplateBuilder;
-
     private final KrameriusUserFactory krameriusUserFactory;
 
-    public KrameriusClient getClient(String instanceName) {
-        KrameriusProperties.KrameriusInstance instance = config.getKrameriusInstances().get(instanceName);
+    public K7Client getClient(String instanceName) {
+
+        KrameriusProperties.KrameriusInstance instance = 
+                config.getKrameriusInstances().get(instanceName);
 
         if (instance == null) {
             throw new KrameriusInstanceNotConfiguredException(
                     "Kramerius instance with ID " + instanceName + " not found");
         }
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofMillis(instance.getConnectTimeout()));
-        requestFactory.setReadTimeout(Duration.ofMillis(instance.getReadTimeout()));
-
-        RestTemplate restTemplate = restTemplateBuilder
-                .requestFactory(() -> requestFactory)
+        ConnectionProvider connectionProvider = ConnectionProvider.builder("kramerius-pool-" + instanceName)
+                .maxConnections(instance.getMaxConnections())
+                .pendingAcquireTimeout(Duration.ofMillis(instance.getPendingConnectionAcquireTimeout()))
+                .maxIdleTime(Duration.ofMillis(instance.getMaxConnectionIdleTime()))
                 .build();
 
-        return new K7Client(instance, restTemplate, krameriusUserFactory);
+        HttpClient httpClient = HttpClient.create(connectionProvider)
+                .responseTimeout(Duration.ofMillis(instance.getReadTimeout()))
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
+                        (int) instance.getConnectTimeout())
+                .compress(true);
+
+        WebClient webClient = WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .baseUrl(instance.getUrl())
+                .build();
+
+        return new K7Client(instance, webClient, krameriusUserFactory);
     }
 }

@@ -269,7 +269,7 @@ public class AltoVersionService {
         byte[] content = krameriusService.getAltoBytes(pid, instance);
 
         if (content == null) {
-            throw new AltoNotFoundException("ALTO datastream not found in FOXML for PID: " + pid);
+            throw new AltoNotFoundException("ALTO datastream not found in Kramerius " + instance + " for PID: " + pid);
         }
 
         DigitalObject targetObj = objectHierarchyService.fetchAndStore(pid, instance);

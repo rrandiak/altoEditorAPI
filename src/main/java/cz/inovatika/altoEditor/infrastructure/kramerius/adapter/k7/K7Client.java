@@ -1,9 +1,9 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,20 +13,16 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.Datastream;
 import cz.inovatika.altoEditor.domain.enums.Model;
-import cz.inovatika.altoEditor.exception.AltoVersionNotFoundException;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusClient;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AccessToken;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AkubraOpResponse;
@@ -41,6 +37,7 @@ import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUserFacto
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.SolrResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.UploadAltoOcrResponse;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 public class K7Client implements KrameriusClient {
@@ -50,20 +47,12 @@ public class K7Client implements KrameriusClient {
     private static final int SOLR_CACHE_MAX_SIZE = 2000;
     private static final int CHILDREN_FETCH_ROWS = 300;
 
-    private record SolrSearchKey(String query, String returnFields, int rows, int start, String sort) {}
+    private record SolrSearchKey(String query, String returnFields, int rows, int start, String sort) {
+    }
 
     private final KrameriusProperties.KrameriusInstance config;
-
-    private final RestTemplate restTemplate;
-
+    private final WebClient webClient;
     private final KrameriusUserFactory krameriusUserFactory;
-
-    public K7Client(KrameriusProperties.KrameriusInstance config, RestTemplate restTemplate,
-            KrameriusUserFactory krameriusUserFactory) {
-        this.config = config;
-        this.restTemplate = restTemplate;
-        this.krameriusUserFactory = krameriusUserFactory;
-    }
 
     /**
      * Cached service token used for service-to-service calls.
@@ -77,49 +66,26 @@ public class K7Client implements KrameriusClient {
             .maximumSize(SOLR_CACHE_MAX_SIZE)
             .build(this::fetchSearchInSolr);
 
-    private HttpEntity<String> createJsonRequestEntity(String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        return new HttpEntity<>(headers);
-    }
-
-    private HttpEntity<Void> createXmlAcceptRequestEntity(String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setAccept(List.of(MediaType.APPLICATION_XML, MediaType.TEXT_XML, MediaType.ALL));
-        return new HttpEntity<>(headers);
-    }
-
-    private HttpEntity<byte[]> createXmlContentEntity(String token, byte[] body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        return new HttpEntity<>(body, headers);
-    }
-
-    private HttpEntity<String> createJsonContentEntity(String token, String body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        return new HttpEntity<>(body, headers);
+    public K7Client(KrameriusProperties.KrameriusInstance config, WebClient webClient,
+            KrameriusUserFactory krameriusUserFactory) {
+        this.config = config;
+        this.webClient = webClient;
+        this.krameriusUserFactory = krameriusUserFactory;
     }
 
     private String getServiceToken() {
-        // Fast path without locking
         String token = serviceToken;
         if (token == null) {
             synchronized (this) {
                 token = serviceToken;
                 if (token == null) {
-                    ResponseEntity<K7AccessToken> response = restTemplate.exchange(
-                            config.buildEndpoint("/search/api/exts/v7.0/tokens/" + config.getServiceClientId()
-                                    + "?secrets=" + config.getServiceSecret()),
-                            HttpMethod.GET,
-                            null,
-                            K7AccessToken.class);
-
-                    token = response.getBody().getAccessToken();
+                    K7AccessToken body = webClient.get()
+                            .uri("/search/api/exts/v7.0/tokens/{clientId}?secrets={secret}",
+                                    config.getServiceClientId(), config.getServiceSecret())
+                            .retrieve()
+                            .bodyToMono(K7AccessToken.class)
+                            .block();
+                    token = body != null ? body.getAccessToken() : null;
                     serviceToken = token;
                 }
             }
@@ -132,43 +98,46 @@ public class K7Client implements KrameriusClient {
      * is no longer valid (401/403). On auth failure the cached token is cleared
      * and a new one is obtained.
      */
-    private <T> ResponseEntity<T> exchangeWithServiceToken(Function<String, ResponseEntity<T>> requestSupplier) {
+    private <T> ResponseEntity<T> exchangeWithServiceToken(
+            Function<String, Mono<ResponseEntity<T>>> requestSupplier) {
         String token = getServiceToken();
         try {
-            return requestSupplier.apply(token);
-        } catch (HttpClientErrorException e) {
-            if (e.getStatusCode().equals(HttpStatus.UNAUTHORIZED) || e.getStatusCode().equals(HttpStatus.FORBIDDEN)) {
+            return requestSupplier.apply(token).block();
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
                 synchronized (this) {
                     serviceToken = null;
                 }
-                String refreshedToken = getServiceToken();
-                return requestSupplier.apply(refreshedToken);
+                return requestSupplier.apply(getServiceToken()).block();
             }
             throw e;
         }
     }
 
     private SolrResponse<K7ObjectMetadataDoc> fetchSearchInSolr(SolrSearchKey key) {
-        var builder = UriComponentsBuilder
-                .fromUriString(this.config.buildEndpoint("/search/api/client/v7.0/search"))
+        String uri = UriComponentsBuilder
+                .fromPath("/search/api/client/v7.0/search")
                 .queryParam("q", key.query())
                 .queryParam("fl", key.returnFields())
                 .queryParam("rows", key.rows())
-                .queryParam("start", key.start());
-        if (key.sort() != null && !key.sort().isBlank()) {
-            builder.queryParam("sort", key.sort());
-        }
-        URI uri = builder.build().toUri();
+                .queryParam("start", key.start())
+                .queryParamIfPresent("sort",
+                        Optional.ofNullable(key.sort() == null || key.sort().isBlank() ? null : key.sort()))
+                .build()
+                .toUriString();
 
         ParameterizedTypeReference<SolrResponse<K7ObjectMetadataDoc>> responseType = new ParameterizedTypeReference<>() {
         };
 
         ResponseEntity<SolrResponse<K7ObjectMetadataDoc>> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        uri,
-                        HttpMethod.GET,
-                        createJsonRequestEntity(token),
-                        responseType));
+                token -> webClient.get()
+                        .uri(uri)
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        })
+                        .retrieve()
+                        .toEntity(responseType));
 
         if (response.getStatusCode() != HttpStatus.OK) {
             String bodyDetail = response.getBody() != null ? response.getBody().toString() : "";
@@ -193,13 +162,16 @@ public class K7Client implements KrameriusClient {
 
     @Override
     public KrameriusUser getUser(String userToken) {
-        ResponseEntity<K7UserResponse> response = restTemplate.exchange(
-                config.buildEndpoint("/search/api/client/v7.0/user"),
-                HttpMethod.GET,
-                createJsonRequestEntity(userToken),
-                K7UserResponse.class);
+        K7UserResponse userResponse = webClient.get()
+                .uri("/search/api/client/v7.0/user")
+                .headers(h -> {
+                    h.setBearerAuth(userToken);
+                    h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                })
+                .retrieve()
+                .bodyToMono(K7UserResponse.class)
+                .block();
 
-        K7UserResponse userResponse = response.getBody();
         if (userResponse == null) {
             throw new RuntimeException("Failed to get user info from Kramerius");
         }
@@ -209,13 +181,20 @@ public class K7Client implements KrameriusClient {
 
     @Override
     public boolean hasPermissionToRead(String pid, String userToken) {
-        ResponseEntity<Void> response = restTemplate.exchange(
-                config.buildEndpoint("/search/api/client/v7.0/items/" + pid),
-                HttpMethod.HEAD,
-                createJsonRequestEntity(userToken),
-                Void.class);
-
-        return response.getStatusCode().is2xxSuccessful();
+        try {
+            webClient.head()
+                    .uri("/search/api/client/v7.0/items/{pid}", pid)
+                    .headers(h -> {
+                        h.setBearerAuth(userToken);
+                        h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                    })
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+            return true;
+        } catch (WebClientResponseException e) {
+            return e.getStatusCode().is2xxSuccessful();
+        }
     }
 
     @Override
@@ -245,7 +224,7 @@ public class K7Client implements KrameriusClient {
                     solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
 
             start += CHILDREN_FETCH_ROWS;
-        } while (solrResponse.getResponse().getNumFound() > start + CHILDREN_FETCH_ROWS);
+        } while (solrResponse.getResponse().getNumFound() > start);
 
         return children;
     }
@@ -264,7 +243,7 @@ public class K7Client implements KrameriusClient {
                     solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
 
             start += CHILDREN_FETCH_ROWS;
-        } while (solrResponse.getResponse().getNumFound() > start + CHILDREN_FETCH_ROWS);
+        } while (solrResponse.getResponse().getNumFound() > start);
 
         return children;
     }
@@ -346,41 +325,55 @@ public class K7Client implements KrameriusClient {
     @Override
     public byte[] getImageBytes(String pid) {
         ResponseEntity<byte[]> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        this.config.buildEndpoint("/search/api/client/v7.0/items/" + pid + "/image"),
-                        HttpMethod.GET,
-                        createJsonRequestEntity(token),
-                        byte[].class));
+                token -> webClient.get()
+                        .uri("/search/api/client/v7.0/items/{pid}/image", pid)
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        })
+                        .retrieve()
+                        .toEntity(byte[].class));
 
         return response.getBody();
     }
 
+    /**
+     * Returns ALTO bytes for the given PID, or {@code null} if the ALTO datastream
+     * does not exist in Kramerius (e.g. 404 or "not found in repository").
+     * Does not throw when ALTO is missing.
+     */
     @Override
     public byte[] getAltoBytes(String pid) {
-        ResponseEntity<byte[]> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        this.config.buildEndpoint("/search/api/client/v7.0/items/" + pid + "/ocr/alto"),
-                        HttpMethod.GET,
-                        createXmlAcceptRequestEntity(token),
-                        byte[].class));
+        try {
+            ResponseEntity<byte[]> response = exchangeWithServiceToken(
+                    token -> webClient.get()
+                            .uri("/search/api/client/v7.0/items/{pid}/ocr/alto", pid)
+                            .headers(h -> {
+                                h.setBearerAuth(token);
+                                h.setAccept(List.of(MediaType.APPLICATION_XML, MediaType.TEXT_XML, MediaType.ALL));
+                            })
+                            .retrieve()
+                            .toEntity(byte[].class));
 
-        if (response.getStatusCode() == HttpStatus.NOT_FOUND) {
-            throw new AltoVersionNotFoundException(
-                    "Alto version for PID " + pid + " not found in Kramerius " + config.getTitle());
-        } else if (!response.getStatusCode().is2xxSuccessful()) {
+            return response.getBody();
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                String body = e.getResponseBodyAsString();
+                if (body != null && body.contains("not found in repository")) {
+                    return null;
+                }
+                throw new RuntimeException(
+                        "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle(), e);
+            }
             throw new RuntimeException(
-                    "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle());
+                    "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle(), e);
         }
-
-        return response.getBody();
     }
 
     @Override
     public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] altoContent, byte[] ocrContent) {
         replaceDatastream(pid, Datastream.ALTO, altoContent);
-
         replaceDatastream(pid, Datastream.TEXT_OCR, ocrContent);
-
         return planIndexationProcess(pid);
     }
 
@@ -390,21 +383,23 @@ public class K7Client implements KrameriusClient {
     }
 
     private void deleteDatastream(String pid, Datastream ds) {
-        URI uri = UriComponentsBuilder
-                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/repository/deleteDatastream"))
+        String uri = UriComponentsBuilder
+                .fromPath("/search/api/admin/v7.0/repository/deleteDatastream")
                 .queryParam("dsId", ds)
                 .queryParam("pid", pid)
                 .build()
-                .encode()
-                .toUri();
+                .toUriString();
 
         try {
             ResponseEntity<K7AkubraOpResponse> response = exchangeWithServiceToken(
-                    token -> restTemplate.exchange(
-                            uri,
-                            HttpMethod.DELETE,
-                            createJsonRequestEntity(token),
-                            K7AkubraOpResponse.class));
+                    token -> webClient.delete()
+                            .uri(uri)
+                            .headers(h -> {
+                                h.setBearerAuth(token);
+                                h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                            })
+                            .retrieve()
+                            .toEntity(K7AkubraOpResponse.class));
 
             if (!response.getStatusCode().is2xxSuccessful()) {
                 throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
@@ -413,7 +408,7 @@ public class K7Client implements KrameriusClient {
             if (response.getBody() == null || response.getBody().getDsId() != ds) {
                 throw new RuntimeException("Failed to delete datastream " + ds + " for PID " + pid);
             }
-        } catch (HttpClientErrorException e) {
+        } catch (WebClientResponseException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.info("Datastream {} for PID {} was already absent in Kramerius {}", ds, pid, config.getTitle());
                 return;
@@ -423,21 +418,24 @@ public class K7Client implements KrameriusClient {
     }
 
     private void uploadDatastream(String pid, Datastream ds, byte[] content) {
-        URI uri = UriComponentsBuilder
-                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/repository/createManagedDatastream"))
+        String uri = UriComponentsBuilder
+                .fromPath("/search/api/admin/v7.0/repository/createManagedDatastream")
                 .queryParam("mimeType", ds.getMimeType())
                 .queryParam("dsId", ds)
                 .queryParam("pid", pid)
                 .build()
-                .encode()
-                .toUri();
+                .toUriString();
 
         ResponseEntity<K7AkubraOpResponse> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        uri,
-                        HttpMethod.POST,
-                        createXmlContentEntity(token, content),
-                        K7AkubraOpResponse.class));
+                token -> webClient.post()
+                        .uri(uri)
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                        })
+                        .bodyValue(content)
+                        .retrieve()
+                        .toEntity(K7AkubraOpResponse.class));
 
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new RuntimeException("Failed to upload datastream " + ds + " for PID " + pid);
@@ -449,39 +447,39 @@ public class K7Client implements KrameriusClient {
     }
 
     private UploadAltoOcrResponse planIndexationProcess(String pid) {
-        URI uri = UriComponentsBuilder
-                .fromUriString(config.buildEndpoint("/search/api/admin/v7.0/processes"))
-                .build()
-                .encode()
-                .toUri();
         K7ReindexProcess processDef = new K7ReindexProcess(pid);
 
         ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        uri,
-                        HttpMethod.POST,
-                        createJsonContentEntity(token, processDef.toJson()),
-                        K7PlanProcessResponse.class));
+                token -> webClient.post()
+                        .uri("/search/api/admin/v7.0/processes")
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setContentType(MediaType.APPLICATION_JSON);
+                        })
+                        .bodyValue(processDef.toJson())
+                        .retrieve()
+                        .toEntity(K7PlanProcessResponse.class));
 
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new RuntimeException("Failed to plan indexation for PID " + pid);
         }
 
         String uuid = response.getBody().getUuid();
-
         return new UploadAltoOcrResponse(uuid, getProcessLink(uuid));
     }
 
     private String getProcessLink(String processUuid) {
         ResponseEntity<K7ProcessBatch> response = exchangeWithServiceToken(
-                token -> restTemplate.exchange(
-                        config.buildEndpoint("/search/api/admin/v7.0/processes/by_process_uuid/" + processUuid),
-                        HttpMethod.GET,
-                        createJsonRequestEntity(token),
-                        K7ProcessBatch.class));
+                token -> webClient.get()
+                        .uri("/search/api/admin/v7.0/processes/by_process_uuid/{uuid}", processUuid)
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        })
+                        .retrieve()
+                        .toEntity(K7ProcessBatch.class));
 
         String processId = response.getBody().getProcess().getId();
-
         String adminUrl = config.getAdminUrl();
 
         if (adminUrl != null && !adminUrl.isBlank()) {

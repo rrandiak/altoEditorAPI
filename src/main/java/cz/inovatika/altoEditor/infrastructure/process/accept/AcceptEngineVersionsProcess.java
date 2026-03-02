@@ -67,9 +67,6 @@ public class AcceptEngineVersionsProcess extends BatchProcess {
             for (Integer versionId : versionIds) {
                 AltoVersionUploadContent uploadContent = altoVersionService.getAltoVersionUploadContent(versionId);
 
-                log.info("ALTO content size: {} bytes", uploadContent.getAltoContent().length);
-                log.info("OCR content size: {} bytes", uploadContent.getOcrContent().length);
-                log.info("Pid: {}", uploadContent.getPid());
                 krameriusService.uploadAltoOcr(uploadContent.getPid(), uploadContent.getAltoContent(),
                         uploadContent.getOcrContent());
 

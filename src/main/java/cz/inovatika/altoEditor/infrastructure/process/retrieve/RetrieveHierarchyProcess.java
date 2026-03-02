@@ -9,6 +9,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import cz.inovatika.altoEditor.config.properties.BatchProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
@@ -84,6 +85,7 @@ public class RetrieveHierarchyProcess extends BatchProcess {
 
         AtomicBoolean producerDone = new AtomicBoolean(false);
         AtomicInteger processed = new AtomicInteger(0);
+        AtomicReference<Throwable> firstError = new AtomicReference<>();
 
         try {
             batchService.setState(batch, BatchState.RUNNING);
@@ -102,18 +104,28 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             pool.submit(() -> {
                 try {
                     expandHierarchy(root, instance, queue, batch);
+                } catch (Exception e) {
+                    firstError.compareAndSet(null, e);
                 } finally {
                     producerDone.set(true);
                 }
             });
 
-            // Consumer loop: poll with timeout, exit when producer done and queue empty
+            // Consumer loop: exit on any error (producer or any consumer) or when producer done and queue empty
             Runnable consumer = () -> {
                 try {
                     while (true) {
+                        if (firstError.get() != null) {
+                            break;
+                        }
                         KrameriusObjectMetadata m = queue.poll(POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                         if (m != null) {
-                            processItem(m, instance, batch, processed);
+                            try {
+                                processItem(m, instance, batch, processed);
+                            } catch (Exception e) {
+                                firstError.compareAndSet(null, e);
+                                break;
+                            }
                         } else if (producerDone.get() && queue.isEmpty()) {
                             break;
                         }
@@ -130,6 +142,12 @@ public class RetrieveHierarchyProcess extends BatchProcess {
 
             // Main thread as consumer
             consumer.run();
+
+            // Propagate first failure (producer or any consumer) so batch is marked failed
+            Throwable t = firstError.get();
+            if (t != null) {
+                throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+            }
 
             // Wait for the producer and consumers to finish
             // Should not take more than 1 minute, because the work should be done by now
@@ -172,7 +190,7 @@ public class RetrieveHierarchyProcess extends BatchProcess {
 
         // Set the estimated item count to the number of pages in the hierarchy first
         // Update it as we discover new items
-        int estimatedItemCount = root.getPagesCount() + 1;
+        int estimatedItemCount = krameriusService.getPagesCount(root.getPid(), instance) + 1;
         batchService.setEstimatedItemCount(batch, estimatedItemCount);
 
         int discovered = 0;

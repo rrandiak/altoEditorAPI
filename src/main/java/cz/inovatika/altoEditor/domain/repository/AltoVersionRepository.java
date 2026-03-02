@@ -71,8 +71,10 @@ public interface AltoVersionRepository
     Optional<AltoVersion> findEngineUpdateCandidate(UUID uuid, Long userId);
 
     /**
-     * PENDING AltoVersion IDs owned by the given user (engine) whose page is a descendant
-     * of the hierarchy node {@code rootUuid}. Uses a recursive CTE over object_hierarchy.
+     * PENDING AltoVersion IDs owned by the given user (engine) whose page is a
+     * descendant
+     * of the hierarchy node {@code uuid}. Uses a recursive CTE over
+     * object_hierarchy.
      */
     @Query(value = """
             WITH RECURSIVE descendants (uuid) AS (
@@ -83,11 +85,12 @@ public interface AltoVersionRepository
             )
             SELECT av.id FROM alto_versions av
             INNER JOIN descendants d ON av.uuid = d.uuid
-            WHERE av.state = AltoVersionState.PENDING AND av.user.id = :userId
+            WHERE av.state = :pendingOrdinal AND av.user_id = :userId
             """, nativeQuery = true)
     List<Integer> findPendingVersionIdsByUserInHierarchy(
-            @Param("rootUuid") UUID uuid,
-            @Param("userId") Long userId);
+            @Param("uuid") UUID uuid,
+            @Param("userId") Long userId,
+            @Param("pendingOrdinal") int pendingOrdinal);
 
     /**
      * Find digital object by UUID and version
@@ -131,4 +134,13 @@ public interface AltoVersionRepository
                 AND instance = :instance
             """, nativeQuery = true)
     void removeInstanceAssociation(@Param("uuid") UUID uuid, @Param("instance") String instance);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE AltoVersion av SET av.state = AltoVersionState.ARCHIVED
+            WHERE av.digitalObject.uuid = :uuid AND av.version != :version AND av.state IN (AltoVersionState.ACTIVE, AltoVersionState.STALE)
+            """)
+    void archiveActiveAndStaleVersions(@Param("uuid") UUID uuid, @Param("version") Integer version);
+
 }

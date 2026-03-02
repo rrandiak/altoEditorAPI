@@ -1,5 +1,7 @@
 package cz.inovatika.altoEditor.presentation.facade;
 
+import java.util.List;
+
 import org.hibernate.search.engine.search.query.SearchResult;
 import org.springframework.stereotype.Component;
 
@@ -50,8 +52,8 @@ public class AltoVersionFacade {
 
     /** Search ALTO versions related to current user (or ACTIVE). */
     public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
-        SearchResult<AltoVersion> results = service.searchRelated(
-                userContext.getUserId(),
+        SearchResult<AltoVersion> results = service.search(
+                List.of(userContext.getUserId()),
                 request.getInstance(),
                 request.getTargetPid(),
                 request.getHierarchyPid(),
@@ -163,6 +165,7 @@ public class AltoVersionFacade {
         AltoVersionUploadContent content = service.getAltoVersionUploadContent(versionId);
 
         krameriusService.uploadAltoOcr(content.getPid(), content.getAltoContent(), content.getOcrContent());
+        krameriusService.planObjectIndexing(content.getPid());
 
         service.accept(versionId);
     }

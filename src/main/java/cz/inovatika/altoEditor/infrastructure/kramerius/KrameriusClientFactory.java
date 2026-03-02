@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import reactor.netty.resources.ConnectionProvider;
@@ -22,6 +23,8 @@ public class KrameriusClientFactory {
 
     private final KrameriusProperties config;
     private final KrameriusUserFactory krameriusUserFactory;
+
+    private static final int MAX_IN_MEMORY_BYTES = 4 * 1024 * 1024; // 4MB
 
     public K7Client getClient(String instanceName) {
 
@@ -45,9 +48,14 @@ public class KrameriusClientFactory {
                         (int) instance.getConnectTimeout())
                 .compress(true);
 
+        ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(MAX_IN_MEMORY_BYTES))
+                .build();
+
         WebClient webClient = WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(instance.getUrl())
+                .exchangeStrategies(exchangeStrategies)
                 .build();
 
         return new K7Client(instance, webClient, krameriusUserFactory);

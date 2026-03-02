@@ -3,11 +3,16 @@ package cz.inovatika.altoEditor.infrastructure.process.accept;
 import java.util.List;
 
 import cz.inovatika.altoEditor.domain.adapter.PidAdapter;
+import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.model.User;
 import cz.inovatika.altoEditor.domain.repository.AltoVersionRepository;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
+import cz.inovatika.altoEditor.domain.service.UserService;
+import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
+import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,12 +25,23 @@ public class AcceptEngineVersionsProcess extends BatchProcess {
 
     private final AltoVersionRepository altoVersionRepository;
 
-    public AcceptEngineVersionsProcess(BatchService batchService, AltoVersionService altoVersionService,
-            AltoVersionRepository altoVersionRepository, Batch batch) {
+    private final UserService userService;
+
+    private final KrameriusService krameriusService;
+
+    public AcceptEngineVersionsProcess(
+            BatchService batchService,
+            AltoVersionService altoVersionService,
+            AltoVersionRepository altoVersionRepository,
+            UserService userService,
+            KrameriusService krameriusService,
+            Batch batch) {
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
 
         this.batchService = batchService;
         this.altoVersionService = altoVersionService;
+        this.userService = userService;
+        this.krameriusService = krameriusService;
 
         this.altoVersionRepository = altoVersionRepository;
     }
@@ -39,17 +55,30 @@ public class AcceptEngineVersionsProcess extends BatchProcess {
             batchService.setState(batch, BatchState.RUNNING);
             batchService.setProcessedItemCount(batch, 0);
 
+            User user = userService.getUserByUsername(batch.getEngine());
+
             List<Integer> versionIds = altoVersionRepository.findPendingVersionIdsByUserInHierarchy(
-                    PidAdapter.toUuid(batch.getPid()), batch.getCreatedBy().getId());
+                    PidAdapter.toUuid(batch.getPid()), user.getId(),
+                    AltoVersionState.PENDING.ordinal());
 
             batchService.setEstimatedItemCount(batch, versionIds.size());
 
             // --- ACCEPT VERSIONS ---
             for (Integer versionId : versionIds) {
+                AltoVersionUploadContent uploadContent = altoVersionService.getAltoVersionUploadContent(versionId);
+
+                log.info("ALTO content size: {} bytes", uploadContent.getAltoContent().length);
+                log.info("OCR content size: {} bytes", uploadContent.getOcrContent().length);
+                log.info("Pid: {}", uploadContent.getPid());
+                krameriusService.uploadAltoOcr(uploadContent.getPid(), uploadContent.getAltoContent(),
+                        uploadContent.getOcrContent());
+
                 altoVersionService.accept(versionId);
 
                 batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + 1);
             }
+
+            krameriusService.planHierarchyIndexing(batch.getPid());
 
             // --- FINISH ---
             batchService.setState(batch, BatchState.DONE);

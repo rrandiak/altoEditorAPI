@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -73,6 +74,7 @@ class AltoVersionServiceTest {
     private AltoVersionService service;
 
     private static final String PID = "uuid:123e4567-e89b-12d3-a456-426614174000";
+    private static final UUID TEST_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
     private static final long USER_ID = 10L;
     private static final User USER = User.builder().id(USER_ID).username("editor").build();
     private static final int VERSION = 1;
@@ -376,21 +378,19 @@ class AltoVersionServiceTest {
     class Accept {
 
         @Test
-        @DisplayName("sets version to ACTIVE and archives other ACTIVE versions for same PID")
+        @DisplayName("sets version to ACTIVE and archives other ACTIVE/STALE versions for same PID")
         void setsActiveAndArchivesOthers() {
-            DigitalObject dobj = DigitalObject.builder().pid(PID).build();
+            DigitalObject dobj = DigitalObject.builder().uuid(TEST_UUID).pid(PID).build();
             AltoVersion toAccept = AltoVersion.builder().id(1).digitalObject(dobj).version(2).state(AltoVersionState.PENDING).build();
-            AltoVersion otherActive = AltoVersion.builder().id(2).digitalObject(dobj).version(1).state(AltoVersionState.ACTIVE).build();
 
             when(repository.findById(1)).thenReturn(Optional.of(toAccept));
-            when(repository.findAllByDigitalObjectUuid(dobj.getUuid())).thenReturn(java.util.List.of(toAccept, otherActive));
-            when(repository.saveAll(any())).thenReturn(java.util.List.of());
+            when(repository.save(any(AltoVersion.class))).thenAnswer(inv -> inv.getArgument(0));
 
             service.accept(1);
 
-            verify(repository).saveAll(any());
+            verify(repository).archiveActiveAndStaleVersions(TEST_UUID, 2);
+            verify(repository).save(toAccept);
             assertThat(toAccept.getState()).isEqualTo(AltoVersionState.ACTIVE);
-            assertThat(otherActive.getState()).isEqualTo(AltoVersionState.ARCHIVED);
         }
     }
 

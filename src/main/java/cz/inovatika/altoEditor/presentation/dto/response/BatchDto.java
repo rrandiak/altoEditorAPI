@@ -31,10 +31,12 @@ public class BatchDto {
 
     private BatchState state;
     private BatchSubstate substate;
+    private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     private Integer estimatedItemCount;
+    private Integer processedItemCount;
 
     private String log;
 }

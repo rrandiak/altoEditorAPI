@@ -73,4 +73,16 @@ public class KrameriusService {
             getClient(instance).uploadAltoOcr(pid, alto, ocr);
         }
     }
+
+    public void planObjectIndexing(String pid) {
+        for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
+            getClient(instance).planObjectIndexing(pid);
+        }
+    }
+
+    public void planHierarchyIndexing(String pid) {
+        for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
+            getClient(instance).planHierarchyIndexing(pid);
+        }
+    }
 }

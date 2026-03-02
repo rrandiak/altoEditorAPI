@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.StringJoiner;
 
 import org.hibernate.search.engine.backend.types.Projectable;
 import org.hibernate.search.engine.backend.types.Sortable;
@@ -224,4 +225,35 @@ public class AltoVersion {
 
         return ancestorTitles;
     }
+
+    @Transient
+    @KeywordField(name = "parentPid", sortable = Sortable.YES)
+    @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW, derivedFrom = {
+            @ObjectPath(@PropertyValue(propertyName = "ancestorPids"))
+    })
+    public String getParentSort() {
+        DigitalObject parent = this.getDigitalObject().getParent();
+        return parent != null ? parent.getPid() : null;
+    }
+    
+    @Transient
+    @KeywordField(name = "title_sort", sortable = Sortable.YES)
+    @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW, derivedFrom = {
+            @ObjectPath(@PropertyValue(propertyName = "ancestorTitles")),
+            @ObjectPath(@PropertyValue(propertyName = "pageTitle")) })
+    public String getTitleSort() {
+        StringJoiner sj = new StringJoiner(" ");
+
+        for (String ancestorTitle : getAncestorTitles()) {
+            sj.add(ancestorTitle);
+        }
+
+        String pt = getPageTitle();
+        if (pt != null) {
+            sj.add(pt);
+        }
+
+        return sj.toString();
+    }
+
 }

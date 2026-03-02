@@ -27,12 +27,13 @@ public class SystemController {
     /**
      * Returns basic system/app information (e.g. API version).
      *
-     * @return Info DTO; currently contains {@link InfoDto#getVersion() version}.
+     * @return Info DTO; currently contains {@link InfoDto#getVersion() version} and {@link InfoDto#getInstances() instances}.
      */
     @GetMapping("/info")
-    @PreAuthorize("hasAuthority('EDITOR') or hasAuthority('CURATOR')")
     public ResponseEntity<InfoDto> getInfo() {
-        return ResponseEntity.ok(new InfoDto());
+        InfoDto info = facade.getInfo();
+
+        return ResponseEntity.ok(info);
     }
 
     /**

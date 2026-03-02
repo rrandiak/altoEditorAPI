@@ -66,67 +66,6 @@ public class AltoVersionService {
     private final BatchRepository batchRepository;
 
     @Transactional(readOnly = true)
-    public SearchResult<AltoVersion> searchRelated(
-            Long userId,
-            String instance,
-            String targetPid,
-            String hierarchyPid,
-            String title,
-            LocalDateTime createdAfter,
-            LocalDateTime createdBefore,
-            List<AltoVersionState> states,
-            int offset,
-            int limit,
-            String sortBy,
-            SortOrder sortOrder) {
-
-        SearchSession session = Search.session(entityManager);
-
-        String username = userService.getUserById(userId).getUsername();
-
-        var query = session.search(AltoVersion.class)
-                .where(f -> {
-                    var bool = f.bool();
-
-                    bool.must(f.bool().should(f.match().field("username").matching(username)));
-                    if (instance != null) {
-                        bool.must(f.match().field("instance").matching(instance));
-                    }
-                    if (targetPid != null) {
-                        bool.must(f.match().field("pid").matching(targetPid));
-                    }
-                    if (hierarchyPid != null) {
-                        var targetOrHierarchy = f.bool().should(f.match().field("pid").matching(hierarchyPid))
-                                .should(f.terms().field("ancestorPids").matchingAny(hierarchyPid));
-                        bool.must(targetOrHierarchy);
-                    }
-                    if (title != null) {
-                        // Match title in either pageTitle or ancestorTitles
-                        var titleOr = f.bool()
-                                .should(f.wildcard().field("pageTitle").matching("*" + title + "*"))
-                                .should(f.wildcard().field("ancestorTitles").matching("*" + title + "*"));
-                        bool.must(titleOr);
-                    }
-                    if (createdAfter != null) {
-                        bool.must(f.range().field("createdAt").atLeast(createdAfter));
-                    }
-                    if (createdBefore != null) {
-                        bool.must(f.range().field("createdAt").atMost(createdBefore));
-                    }
-                    if (states != null && !states.isEmpty()) {
-                        bool.must(f.terms().field("state").matchingAny(states));
-                    }
-                    return bool;
-                });
-
-        if (sortBy != null) {
-            query.sort(f -> f.field(sortBy).order(sortOrder));
-        }
-
-        return query.fetch(offset, limit);
-    }
-
-    @Transactional(readOnly = true)
     public SearchResult<AltoVersion> search(
             List<Long> users,
             String instance,
@@ -193,7 +132,17 @@ public class AltoVersionService {
                 });
 
         if (sortBy != null) {
-            query.sort(f -> f.field(sortBy).order(sortOrder));
+            if (sortBy.equals("title")) {
+                query.sort(f -> f.field("title_sort").order(sortOrder)
+                        .then().field("version").order(sortOrder));
+            } else if (sortBy.equals("pageIndex")) {
+                query.sort(f -> f.field("parentPid").order(sortOrder)
+                        .then().field("pageIndex").order(sortOrder)
+                        .then().field("version").order(sortOrder));
+            } else {
+                query.sort(f -> f.field(sortBy).order(sortOrder)
+                        .then().field("version").order(sortOrder));
+            }
         }
 
         return query.fetch(offset, limit);
@@ -544,28 +493,18 @@ public class AltoVersionService {
      * And its then does the following:
      * - Changes the object's state to 'ACTIVE' (making it the default for editing
      * and viewing).
-     * - Archives previous ACTIVE version for the same PID, only if the target ALTO
-     * version is not already ACTIVE.
+     * - Archives previous ACTIVE version for the same PID, if it is not the same as the target ALTO version.
      * - Archives all STALE versions of the same PID.
      */
     public void accept(int versionId) {
         AltoVersion digitalObject = repository.findById(versionId)
                 .orElseThrow(() -> new RuntimeException("ALTO version not found with ID: " + versionId));
 
+        repository.archiveActiveAndStaleVersions(digitalObject.getDigitalObject().getUuid(), digitalObject.getVersion());
+
         digitalObject.setState(AltoVersionState.ACTIVE);
+        repository.save(digitalObject);
 
-        List<AltoVersion> updated = repository.findAllByDigitalObjectUuid(digitalObject.getDigitalObject().getUuid())
-                .stream()
-                .filter(obj -> obj.getId() != digitalObject.getId() && obj.getState() == AltoVersionState.ACTIVE)
-                .map(obj -> {
-                    obj.setState(AltoVersionState.ARCHIVED);
-                    return obj;
-                })
-                .collect(Collectors.toList());
-
-        updated.add(digitalObject);
-
-        repository.saveAll(updated);
         objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
     }
 

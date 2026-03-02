@@ -28,14 +28,13 @@ import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7Acces
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AkubraOpResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ObjectMetadataDoc;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7PlanProcessResponse;
-import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ProcessBatch;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ReindexProcess;
+import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ReindexProcess.ReindexType;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7UserResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUserFactory;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.SolrResponse;
-import cz.inovatika.altoEditor.infrastructure.kramerius.model.UploadAltoOcrResponse;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
@@ -371,10 +370,9 @@ public class K7Client implements KrameriusClient {
     }
 
     @Override
-    public UploadAltoOcrResponse uploadAltoOcr(String pid, byte[] altoContent, byte[] ocrContent) {
+    public void uploadAltoOcr(String pid, byte[] altoContent, byte[] ocrContent) {
         replaceDatastream(pid, Datastream.ALTO, altoContent);
         replaceDatastream(pid, Datastream.TEXT_OCR, ocrContent);
-        return planIndexationProcess(pid);
     }
 
     private void replaceDatastream(String pid, Datastream ds, byte[] content) {
@@ -431,7 +429,8 @@ public class K7Client implements KrameriusClient {
                         .uri(uri)
                         .headers(h -> {
                             h.setBearerAuth(token);
-                            h.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                            h.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                            h.setAccept(List.of(MediaType.APPLICATION_JSON));
                         })
                         .bodyValue(content)
                         .retrieve()
@@ -446,8 +445,8 @@ public class K7Client implements KrameriusClient {
         }
     }
 
-    private UploadAltoOcrResponse planIndexationProcess(String pid) {
-        K7ReindexProcess processDef = new K7ReindexProcess(pid);
+    public void planObjectIndexing(String pid) {
+        K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.OBJECT, pid);
 
         ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
                 token -> webClient.post()
@@ -463,29 +462,24 @@ public class K7Client implements KrameriusClient {
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new RuntimeException("Failed to plan indexation for PID " + pid);
         }
-
-        String uuid = response.getBody().getUuid();
-        return new UploadAltoOcrResponse(uuid, getProcessLink(uuid));
     }
 
-    private String getProcessLink(String processUuid) {
-        ResponseEntity<K7ProcessBatch> response = exchangeWithServiceToken(
-                token -> webClient.get()
-                        .uri("/search/api/admin/v7.0/processes/by_process_uuid/{uuid}", processUuid)
+    public void planHierarchyIndexing(String pid) {
+        K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.TREE_AND_FOSTER_TREES, pid);
+
+        ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
+                token -> webClient.post()
+                        .uri("/search/api/admin/v7.0/processes")
                         .headers(h -> {
                             h.setBearerAuth(token);
-                            h.setAccept(List.of(MediaType.APPLICATION_JSON));
+                            h.setContentType(MediaType.APPLICATION_JSON);
                         })
+                        .bodyValue(processDef.toJson())
                         .retrieve()
-                        .toEntity(K7ProcessBatch.class));
+                        .toEntity(K7PlanProcessResponse.class));
 
-        String processId = response.getBody().getProcess().getId();
-        String adminUrl = config.getAdminUrl();
-
-        if (adminUrl != null && !adminUrl.isBlank()) {
-            return adminUrl.replaceAll("/+$", "") + "/processes/standard-output/" + processId;
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new RuntimeException("Failed to plan hierarchy indexation for PID " + pid);
         }
-
-        return config.buildEndpoint("/search/api/admin/v7.0/processes/by_process_id/" + processId);
     }
 }

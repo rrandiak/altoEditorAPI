@@ -41,19 +41,20 @@ class SystemControllerTest extends ControllerTest {
     }
 
     @Test
-    @DisplayName("Should return 403 Forbidden for user without required authority")
-    @WithMockUser(authorities = "USER")
-    void getInfo_asUser_returnsForbidden() throws Exception {
+    @DisplayName("Should return 200 OK and InfoDto for user without required authority")
+    void getInfo_withoutAuthority_returnsOk() throws Exception {
         mockMvc.perform(get("/api/system/info")
                 .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
 
     @Test
-    @DisplayName("Should return 401 Unauthorized for anonymous user")
-    void getInfo_anonymous_returnsUnauthorized() throws Exception {
+    @DisplayName("Should return 200 OK and InfoDto for anonymous user")
+    void getInfo_anonymous_returnsOk() throws Exception {
         mockMvc.perform(get("/api/system/info")
                 .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
 }

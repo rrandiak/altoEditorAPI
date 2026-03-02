@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.infrastructure.process.retrieve;
 
 import org.springframework.stereotype.Component;
 
+import cz.inovatika.altoEditor.config.properties.BatchProperties;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
@@ -22,6 +23,8 @@ public class RetrieveHierarchyProcessFactory {
 
     private final ObjectHierarchyService objectHierarchyService;
 
+    private final BatchProperties batchProperties;
+
     private final UserService userService;
 
     public RetrieveHierarchyProcess create(Batch batch) {
@@ -30,6 +33,7 @@ public class RetrieveHierarchyProcessFactory {
                 krameriusService,
                 altoVersionService,
                 objectHierarchyService,
+                batchProperties,
                 userService.getUserByUsername(batch.getInstance()).getId(),
                 batch);
     }

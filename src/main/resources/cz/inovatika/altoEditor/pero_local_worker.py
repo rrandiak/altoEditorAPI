@@ -3,6 +3,9 @@ PERO OCR relay worker: pops jobs from Redis, downloads input from MinIO,
 sends to PERO server, waits for ALTO OCR, uploads results to MinIO
 and marks job done. Runs indefinitely until stopped (e.g. Ctrl+C).
 Run on a host that can reach the PERO server. Requires Redis and MinIO.
+
+Requirementes:
+redis pandas minio requests requests_toolbelt
 """
 
 import argparse

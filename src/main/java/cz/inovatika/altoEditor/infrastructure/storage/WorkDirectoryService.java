@@ -25,14 +25,14 @@ public class WorkDirectoryService {
      */
     public File createWorkDir(String prefix) {
         File appWorkDir = new File(applicationConfig.getWorkDir());
-        if (!appWorkDir.exists() && !appWorkDir.mkdirs()) {
+        appWorkDir.mkdirs();
+        if (!appWorkDir.exists() || !appWorkDir.isDirectory()) {
             throw new IllegalStateException("Failed to create workDir: " + appWorkDir.getAbsolutePath());
         }
 
         try {
             Path tempDir = Files.createTempDirectory(appWorkDir.toPath(), prefix);
             File workDir = tempDir.toFile();
-            LOGGER.info("Created work directory: " + workDir.getAbsolutePath());
             return workDir;
         } catch (IOException e) {
             throw new RuntimeException("Failed to create temporary work directory", e);
@@ -60,7 +60,6 @@ public class WorkDirectoryService {
         if (workDir != null && workDir.exists()) {
             try {
                 deleteDirectory(workDir);
-                LOGGER.info("Cleaned up work directory: " + workDir.getAbsolutePath());
             } catch (IOException e) {
                 LOGGER.warn("Failed to cleanup work directory: " + workDir.getAbsolutePath(), e);
             }

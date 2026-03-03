@@ -35,20 +35,10 @@ public class EnginesProperties {
         private String apiKey = null;
         private String apiKeyArg = "--key";
 
-        private Boolean batchMode = false;
-        private String csvArg = "--csv";
+        @NotNull
+        private Integer parallelism = 2;
 
         private List<String> additionalArgs = new ArrayList<>();
-
-        @AssertTrue(message = "When batchMode is true, csvArg must be set; when batchMode is false, inImageArg, outAltoArg and outOcrArg must be set.")
-        public boolean isValidBatchModeConfiguration() {
-            if (shouldUseBatchMode()) {
-                return csvArg != null && !csvArg.isBlank();
-            }
-            return inImageArg != null && !inImageArg.isBlank()
-                    && outAltoArg != null && !outAltoArg.isBlank()
-                    && outOcrArg != null && !outOcrArg.isBlank();
-        }
 
         @AssertTrue(message = "When useApiKey is true, apiKeyArg must be set.")
         public boolean isValidApiKeyConfiguration() {
@@ -66,10 +56,6 @@ public class EnginesProperties {
 
         public boolean shouldUseApiKey() {
             return apiKey != null && !apiKey.isBlank();
-        }
-
-        public boolean shouldUseBatchMode() {
-            return Boolean.TRUE.equals(batchMode);
         }
     }
 

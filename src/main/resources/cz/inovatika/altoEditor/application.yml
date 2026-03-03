@@ -11,7 +11,7 @@ application:
   engines:
     pero-vut:
       exec: "python"
-      entry: "/usr/local/bin/pero-vut.py"
+      entry: "/usr/local/bin/pero_vut.py"
       apiKey: "${ALTO_EDITOR_PERO_VUT_KEY:replaceMe}"
 
 spring:

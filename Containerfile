@@ -19,7 +19,8 @@ ENV altoeditor.home=/opt/alto-editor
 COPY src/main/resources/cz/inovatika/altoEditor/application.yml /opt/alto-editor/application.yml
 
 # Pero VUT script: application.yml expected entry /usr/local/bin/pero-vut.py
-COPY src/main/resources/cz/inovatika/altoEditor/pero-vut.py /usr/local/bin/pero-vut.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero_vut.py /usr/local/bin/pero-vut.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero_local_client.py /usr/local/bin/pero_local_client.py
 
 # Expose HTTP port (Spring Boot default 8080)
 EXPOSE 8080

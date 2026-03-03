@@ -1,17 +1,21 @@
 package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 
 import java.io.File;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
-import cz.inovatika.altoEditor.domain.enums.BatchSubstate;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
@@ -55,39 +59,11 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
         this.engineConfig = engineConfig;
     }
 
-    private Iterable<List<String>> partitionList(List<String> list, int size) {
-        return () -> new Iterator<List<String>>() {
-            private int currentIndex = 0;
-
-            @Override
-            public boolean hasNext() {
-                return currentIndex < list.size();
-            }
-
-            @Override
-            public List<String> next() {
-                int endIndex = Math.min(currentIndex + size, list.size());
-                List<String> sublist = list.subList(currentIndex, endIndex);
-                currentIndex = endIndex;
-                return sublist;
-            }
-        };
-    }
-
     private ExternalProcess createSingleExternalProcess(File workDir, String pid) {
         return new GenerateSingleExternalProcess(engineConfig,
                 new File(workDir, pid + ".jpg"),
                 new File(workDir, pid + ".xml"),
                 new File(workDir, pid + ".txt"));
-    }
-
-    private ExternalProcess createBatchExternalProcess(File workDir, List<String> pids) {
-        return new GenerateBatchExternalProcess(engineConfig,
-                new File(workDir, "dataTriplets.txt"),
-                pids.stream().map(pid -> new GenerateBatchExternalProcess.DataTriplet(
-                        new File(workDir, pid + ".jpg"),
-                        new File(workDir, pid + ".xml"),
-                        new File(workDir, pid + ".txt"))).collect(Collectors.toList()));
     }
 
     private void runExternalProcess(Batch batch, ExternalProcess externalProcess) {
@@ -101,11 +77,40 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
         }
     }
 
+    private void processPid(Batch batch, String instance, String pid, AtomicInteger processedCount) {
+        File workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
+        try {
+            try {
+                workDirectoryService.saveBytesToFile(
+                        workDir,
+                        pid + ".jpg",
+                        krameriusService.getImageBytes(pid, instance));
+            } catch (java.io.IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            runExternalProcess(batch, createSingleExternalProcess(workDir, pid));
+
+            try {
+                altoVersionService.updateOrCreateEngineVersion(
+                        pid,
+                        this.engineUserId,
+                        Files.readAllBytes(new File(workDir, pid + ".xml").toPath()));
+            } catch (java.io.IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            int newTotal = processedCount.incrementAndGet();
+            batchService.setProcessedItemCount(batch, newTotal);
+        } finally {
+            workDirectoryService.cleanup(workDir);
+        }
+    }
+
     @Override
     public void run() {
         Batch batch = batchService.getById(batchId);
         String instance = batch.getInstance();
-        File workDir = null;
 
         try {
             // --- START PROCESSING ---
@@ -119,61 +124,36 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
             batchService.setEstimatedItemCount(batch, targetPids.size());
 
-            for (List<String> pidChunk : partitionList(targetPids, engineConfig.getBatchSize())) {
-                // --- CREATE WORKDIR ---
-                workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
+            LOGGER.info("Starting generation of ALTO and OCR for batch {} with {} PIDs", batchId, targetPids.size());
 
-                // --- DOWNLOAD IMAGES ---
-                // Download images from Kramerius and save them to workDir
-                batchService.setSubstate(batch, BatchSubstate.DOWNLOADING);
+            // Process PIDs in parallel
+            AtomicInteger processedCount = new AtomicInteger(0);
+            int parallelism = Math.min(engineConfig.getParallelism(), Math.max(1, targetPids.size()));
+            ExecutorService executor = Executors.newFixedThreadPool(parallelism);
 
-                for (String pid : pidChunk) {
-                    workDirectoryService.saveBytesToFile(
-                            workDir,
-                            pid + ".jpg",
-                            krameriusService.getImageBytes(pid, instance));
+            List<Future<?>> futures = new ArrayList<>();
+            for (String pid : targetPids) {
+                futures.add(executor.submit(() -> processPid(batch, instance, pid, processedCount)));
+            }
+
+            // Wait for all PIDs to be processed
+            try {
+                for (Future<?> f : futures) {
+                    f.get();
                 }
-
-                // --- GENERATE ALTO ---
-                // Run selected engine to generate ALTO and OCR from downloaded images
-                // and save the results to workDir
-                batchService.setSubstate(batch, BatchSubstate.GENERATING);
-
-                if (engineConfig.shouldUseBatchMode()) {
-                    runExternalProcess(batch, createBatchExternalProcess(workDir, pidChunk));
-                } else {
-                    for (String pid : pidChunk) {
-                        runExternalProcess(batch, createSingleExternalProcess(workDir, pid));
-                    }
-                }
-
-                // --- SAVE RESULTS ---
-                // Save generated ALTO (and OCR ?) back to Akubra
-                // NOTE: This implementation does not save OCR results, only ALTO.
-                // It is expected that OCR can be extracted from ALTO when needed.
-                batchService.setSubstate(batch, BatchSubstate.SAVING);
-
-                for (String pid : pidChunk) {
-                    altoVersionService.updateOrCreateEngineVersion(
-                            pid,
-                            this.engineUserId,
-                            Files.readAllBytes(new File(workDir, pid + ".xml").toPath()));
-                }
-
-                // --- UPDATE PROGRESS ---
-                batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + pidChunk.size());
-
-                // --- CLEANUP WORKDIR ---
-                workDirectoryService.cleanup(workDir);
+            } catch (ExecutionException e) {
+                executor.shutdownNow();
+                throw e.getCause() instanceof RuntimeException re ? re : new RuntimeException(e.getCause());
+            } finally {
+                executor.shutdown();
             }
 
             // --- FINISH ---
             batchService.setState(batch, BatchState.DONE);
-            batchService.setSubstate(batch, null);
+
+            LOGGER.info("Finished generation of ALTO and OCR for batch {} with {} PIDs", batchId, targetPids.size());
 
         } catch (Exception ex) {
-            workDirectoryService.cleanup(workDir);
-
             LOGGER.error("AltoOcrGeneratorProcess batch {} failed: {}", batchId, ex.getMessage(), ex);
 
             try {

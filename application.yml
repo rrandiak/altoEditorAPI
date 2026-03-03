@@ -11,8 +11,23 @@ application:
   engines:
     pero-vut:
       exec: "python"
-      entry: "/usr/local/bin/pero-vut.py"
+      entry: "/usr/local/bin/pero_vut.py"
       apiKey: "${ALTO_EDITOR_PERO_VUT_KEY:replaceMe}"
+    pero-local:
+      exec: "python"
+      entry: "/usr/local/bin/pero_local_client.py"
+      batchMode: true
+      additionalArgs:
+        - "--redis-url"
+        - "redis://10.19.9.163:30079"
+        - "--minio-url"
+        - "http://10.19.9.163:30009"
+        - "--minio-access-key"
+        - "${ALTO_EDITOR_MINIO_ACCESS_KEY:replaceMe}"
+        - "--minio-secret-key"
+        - "${ALTO_EDITOR_MINIO_SECRET_KEY:replaceMe}"
+        - "--engine"
+        - "1"
 
 spring:
   datasource:

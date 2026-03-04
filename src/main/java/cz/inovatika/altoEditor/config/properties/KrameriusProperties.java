@@ -44,6 +44,8 @@ public class KrameriusProperties {
         private Integer maxConnectionIdleTime = 30000;
         @NotNull
         private Integer pendingConnectionAcquireTimeout = 60000;
+        @NotNull
+        private Integer pendingAcquireMaxCount = 64;
 
         @NotNull
         private Integer indexBatchSize = 1000;

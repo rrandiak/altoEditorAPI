@@ -39,6 +39,7 @@ public class KrameriusClientFactory {
         ConnectionProvider connectionProvider = ConnectionProvider.builder("kramerius-pool-" + instanceName)
                 .maxConnections(instance.getMaxConnections())
                 .pendingAcquireTimeout(Duration.ofMillis(instance.getPendingConnectionAcquireTimeout()))
+                .pendingAcquireMaxCount(instance.getPendingAcquireMaxCount())
                 .maxIdleTime(Duration.ofMillis(instance.getMaxConnectionIdleTime()))
                 .build();
 

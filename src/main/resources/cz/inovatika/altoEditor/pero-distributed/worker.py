@@ -53,9 +53,9 @@ CLEANUP_AGE_SECONDS = 3600
 CLEANUP_CRON_DEFAULT = "*/10 * * * *"
 
 # Batching for thread 2
-BATCH_MIN_SIZE = 8
+BATCH_MIN_SIZE = 4
 BATCH_MAX_INTERVAL = 2.0
-MAX_PENDING_BATCHES = 3
+MAX_PENDING_BATCHES = 4
 
 PERO_TEMP_PATH = tempfile.mkdtemp(prefix="pero_worker_")
 shutdown = threading.Event()
@@ -164,16 +164,6 @@ def thread_2_pero_uploader(
     def emit_batch(engine: int) -> None:
         nonlocal batch_by_engine, last_emit_by_engine
         batch = batch_by_engine[engine]
-
-        # Debug logs
-        sys.stdout.write(
-            f"Emitting batch for engine {engine}: {len(batch)} jobs\n"
-        )
-        sys.stdout.write(f"Queue 1_2 size: {queue_1_2.qsize()}\n")
-        sys.stdout.write(f"Queue 2_3 size: {queue_2_3.qsize()}\n")
-        sys.stdout.write(f"Queue 3_4 size: {queue_3_4.qsize()}\n")
-        sys.stdout.write(f"Redis jobs: {redis_client.llen(QUEUE_KEY)}\n")
-        sys.stdout.flush()
 
         try:
             # Create post processing request

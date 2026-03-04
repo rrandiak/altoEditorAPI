@@ -19,7 +19,7 @@ from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
 from convert import tiff_to_jpeg
 from models import RedisJob
 
-DEFAULT_JOB_TIMEOUT = 30
+DEFAULT_JOB_TIMEOUT = 60
 DEFAULT_POLL_INTERVAL = 0.5
 PASS_THROUGH = [".jpg", ".jpeg", ".jp2"]
 CONVERT_FUNCTIONS = {

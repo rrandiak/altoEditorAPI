@@ -17,6 +17,7 @@ application:
       exec: "python"
       entry: "/usr/local/bin/pero-distributed/client.py"
       parallelism: 40
+      timeout: 300000
       additionalArgs:
         - "--redis-url"
         - "${ALTO_EDITOR_REDIS_URL:replaceMe}"

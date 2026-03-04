@@ -84,6 +84,7 @@ class PeroClient:
         resp = self._session.get(
             url,
             headers={"Content-Type": "application/json"},
+            timeout=30,
         )
         if resp.status_code == 200:
             return PeroRequestStatus.model_validate(resp.json())
@@ -99,18 +100,41 @@ class PeroClient:
         result_format: str,
         output_path: str,
     ) -> None:
-        """Download txt or alto result to a file."""
+        """Download txt or alto result to a file. Retries on connection errors (e.g. IncompleteRead)."""
         url = self._url(
             "download_results", request_id, file_name, result_format
         )
-        resp = self._session.get(url, timeout=30)
-        if resp.status_code != 200:
-            raise RuntimeError(f"download_results failed: {resp.status_code}")
         out_dir = os.path.dirname(output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(resp.text)
+
+        last_error = None
+        for attempt in range(3):
+            try:
+                resp = self._session.get(url, timeout=60)
+                if resp.status_code != 200:
+                    raise RuntimeError(
+                        f"download_results failed: {resp.status_code}"
+                    )
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(resp.text)
+                return
+            except (
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.ConnectionError,
+            ) as e:
+                last_error = e
+                if attempt < 2:
+                    sleep(2 * (attempt + 1))
+            except Exception as e:
+                err_msg = str(e)
+                if "IncompleteRead" in err_msg or "Connection broken" in err_msg:
+                    last_error = e
+                    if attempt < 2:
+                        sleep(2 * (attempt + 1))
+                else:
+                    raise
+        raise last_error
 
     def close(self) -> None:
         self._session.close()

@@ -1,25 +1,11 @@
 """
 PERO OCR relay worker: 4-thread pipeline.
 
-  Thread 1:
-    - Redis blpop for input
-    - Download jpeg from MinIO
-    - Put job to queue 2.
-  Thread 2:
-    - Take from queue 2
-    - Upload jpeg to PERO
-    - Batch (request_id, job_infos) until min size or max interval
-    - Put batch to queue 3.
-  Thread 3:
-    - Take from queue 3
-    - Check status by request_id
-    - If not done/failed put back
-    - If failed write Redis
-    - If done download alto/txt, put successful to queue 4.
-  Thread 4:
-    - Take from queue 3
-    - Upload ocr/alto to MinIO
-    - Send message through Redis.
+  Thread 1: Redis blpop → download JPEG from MinIO → queue_1_2
+  Thread 2: queue_1_2 → batch by engine → upload to PERO → queue_2_3
+  Thread 3: queue_2_3 → poll PERO status → download results → queue_3_4
+  Thread 4: queue_3_4 → upload txt/alto to MinIO → mark Redis done
+  Cleanup:  cron-scheduled removal of stranded MinIO objects
 """
 
 import argparse
@@ -37,13 +23,7 @@ import redis
 from croniter import croniter
 from minio import Minio
 
-from constants import (
-    BUCKET,
-    JOB_KEY_PREFIX,
-    MAX_ENGINE_ID,
-    MIN_ENGINE_ID,
-    QUEUE_KEY,
-)
+from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
 from models import RedisJob
 from pero_client import PeroClient
 
@@ -52,7 +32,6 @@ IMG_PROCESS_TIMEOUT = 120
 CLEANUP_AGE_SECONDS = 3600
 CLEANUP_CRON_DEFAULT = "*/10 * * * *"
 
-# Batching for thread 2
 BATCH_MIN_SIZE = 4
 BATCH_MAX_INTERVAL = 2.0
 MAX_PENDING_BATCHES = 4
@@ -60,31 +39,25 @@ MAX_PENDING_BATCHES = 4
 PERO_TEMP_PATH = tempfile.mkdtemp(prefix="pero_worker_")
 shutdown = threading.Event()
 
-# Queue 1→2: (job_id, local_jpeg_path, engine, bucket, input_key)
-QUEUE_1_2_MAXSIZE = 500
-queue_1_2: Queue[RedisJob] = Queue(maxsize=QUEUE_1_2_MAXSIZE)
-
-# Queue 2→3: list of (request_id, [(job_id, bucket, job_key)])
+queue_1_2: Queue[RedisJob] = Queue(maxsize=500)
 queue_2_3: Queue[tuple[str, list[RedisJob]]] = Queue(maxsize=100)
-
-# Queue 3→4: RedisJob (with local txt/alto paths)
 queue_3_4: Queue[RedisJob] = Queue(maxsize=500)
 
 
+# --- Helpers ---
 def _set_job_status(
     redis_client: redis.Redis,
-    job_id: str,
+    job: RedisJob,
     status: str,
     error: str | None = None,
 ) -> None:
-    job_key = JOB_KEY_PREFIX + job_id
     mapping = {"status": status}
     if error:
         mapping["error"] = error
-        sys.stderr.write(f"Job {job_id}: {status}: {error}\n")
+        sys.stderr.write(f"Job {job.job_id}: {status}: {error}\n")
     else:
-        sys.stdout.write(f"Job {job_id}: {status}\n")
-    redis_client.hset(job_key, mapping=mapping)
+        sys.stdout.write(f"Job {job.job_id}: {status}\n")
+    redis_client.hset(job.job_key, mapping=mapping)
 
 
 def _safe_remove(path: str | None) -> None:
@@ -95,58 +68,78 @@ def _safe_remove(path: str | None) -> None:
             pass
 
 
-# --- Thread 1: Redis -> MinIO download -> queue_1_2 ---
+def _is_processed(statuses: dict, job: RedisJob) -> bool:
+    for key in (job.img_name, job.job_id, f"{job.job_id}.jpg"):
+        s = statuses.get(key)
+        if (
+            isinstance(s, dict)
+            and (s.get("state") or "").upper() == "PROCESSED"
+        ):
+            return True
+    return False
+
+
+# --- Thread 1: Redis → MinIO download → queue_1_2 ---
 def thread_1_redis_downloader(
     redis_client: redis.Redis, minio_client: Minio
 ) -> None:
-    """Redis blpop → download jpeg from MinIO → put job to queue 2."""
     while not shutdown.is_set():
         try:
             raw = redis_client.blpop(QUEUE_KEY, timeout=QUEUE_BLOCK_TIMEOUT)
             if raw is None:
                 continue
 
-            batch: list[RedisJob] = [
-                RedisJob.model_validate(json.loads(raw[1]))
-            ]
-
-            for _ in range(QUEUE_1_2_MAXSIZE - 1):
-                payload_str = redis_client.lpop(QUEUE_KEY)
-                if payload_str is None:
+            # Grab first job + drain any immediately available extras
+            payloads = [raw[1]]
+            while len(payloads) < queue_1_2.maxsize:
+                p = redis_client.lpop(QUEUE_KEY)
+                if p is None:
                     break
-                batch.append(RedisJob.model_validate(json.loads(payload_str)))
+                payloads.append(p)
 
-            for job in batch:
+            for payload in payloads:
                 if shutdown.is_set():
                     break
+                try:
+                    job = RedisJob.model_validate(json.loads(payload))
+                except Exception as e:
+                    sys.stderr.write(f"Thread 1: invalid job payload: {e}\n")
+                    continue
 
                 if job.engine not in range(MIN_ENGINE_ID, MAX_ENGINE_ID + 1):
                     _set_job_status(
-                        redis_client, job.job_id, "failed", "Invalid engine"
+                        redis_client, job, "failed", "Invalid engine"
                     )
                     continue
 
-                _set_job_status(redis_client, job.job_id, "downloading")
-
+                _set_job_status(redis_client, job, "downloading")
+                local_path = job.get_local_img_path(PERO_TEMP_PATH)
                 try:
                     minio_client.fget_object(
-                        bucket_name=BUCKET,
-                        object_name=job.img_object_key,
-                        file_path=job.get_local_img_path(PERO_TEMP_PATH),
+                        BUCKET, job.img_object_key, local_path
                     )
+                    if (
+                        not os.path.exists(local_path)
+                        or os.path.getsize(local_path) == 0
+                    ):
+                        raise RuntimeError(
+                            f"Downloaded file missing or empty: {local_path}"
+                        )
                 except Exception as e:
-                    _set_job_status(redis_client, job.job_id, "failed", str(e))
+                    _set_job_status(redis_client, job, "failed", str(e))
+                    _safe_remove(local_path)
                     continue
 
                 queue_1_2.put(job)
+
         except Exception as e:
             if not shutdown.is_set():
                 sys.stderr.write(f"Thread 1 error: {e}\n")
+
     sys.stdout.write("Thread 1 (redis-downloader) stopped.\n")
 
 
-# --- Thread 2: queue_1_2 -> Upload images to PERO ->
-# -> Post processing request -> queue_2_3 ---
+# --- Thread 2: queue_1_2 → batch → upload to PERO → queue_2_3 ---
 def thread_2_pero_uploader(
     pero_client: PeroClient,
     redis_client: redis.Redis,
@@ -154,182 +147,165 @@ def thread_2_pero_uploader(
     max_waiting_time: float,
     max_pending_batches: int,
 ) -> None:
-    """
-    Take from queue 2, upload jpeg to PERO,
-    batch until min size or max interval, put to queue 3.
-    """
     batch_by_engine: dict[int, list[RedisJob]] = defaultdict(list)
-    last_emit_by_engine: dict[int, float] = defaultdict(lambda: 0.0)
+    last_emit_by_engine: dict[int, float] = defaultdict(time.monotonic)
 
     def emit_batch(engine: int) -> None:
-        nonlocal batch_by_engine, last_emit_by_engine
-        batch = batch_by_engine[engine]
+        batch = batch_by_engine.pop(engine, [])
+        if not batch:
+            return
 
         try:
-            # Create post processing request
             request_id = pero_client.post_processing_request(
                 engine, [job.img_name for job in batch]
             )
-
-            # Upload images to the request and put the job to queue 2_3
-            for job in batch:
-                pero_client.upload_image(
-                    request_id,
-                    job.img_name,
-                    job.get_local_img_path(PERO_TEMP_PATH),
-                    job.content_type,
-                )
-
-            queue_2_3.put((request_id, batch))
-
-            # Set job status to processing
-            for job in batch:
-                _set_job_status(redis_client, job.job_id, "processing")
-
         except Exception as e:
-            # Set all jobs to failed
             for job in batch:
-                _set_job_status(redis_client, job.job_id, "failed", str(e))
-        finally:
-            # Remove local image
-            for job in batch:
+                _set_job_status(redis_client, job, "failed", str(e))
                 _safe_remove(job.get_local_img_path(PERO_TEMP_PATH))
+            return
 
-    # Emit batch if it has reached the minimum size or the maximum waiting time
+        accepted: list[RedisJob] = []
+        for job in batch:
+            local_path = job.get_local_img_path(PERO_TEMP_PATH)
+            try:
+                pero_client.upload_image(
+                    request_id, job.img_name, local_path, job.content_type
+                )
+                accepted.append(job)
+            except Exception as e:
+                _set_job_status(redis_client, job, "failed", str(e))
+            finally:
+                _safe_remove(local_path)
+
+        if accepted:
+            for job in accepted:
+                _set_job_status(redis_client, job, "processing")
+            queue_2_3.put((request_id, accepted))
+        else:
+            sys.stderr.write(
+                f"Thread 2: all uploads failed for request {request_id}\n"
+            )
+
     def maybe_emit() -> None:
-        nonlocal batch_by_engine, last_emit_by_engine
+        if queue_2_3.qsize() >= max_pending_batches:
+            return
         now = time.monotonic()
-
-        for engine, batch in batch_by_engine.items():
+        for engine, batch in list(batch_by_engine.items()):
             if not batch:
                 continue
-            # Backpressure:
-            # don't emit if queue_2_3 has more than max_pending_batches
-            if queue_2_3.qsize() > max_pending_batches:
-                continue
-
-            # Emit batch if it has reached the minimum size
-            # or the maximum waiting time
             if (
                 len(batch) >= min_batch_size
                 or (now - last_emit_by_engine[engine]) >= max_waiting_time
             ):
                 emit_batch(engine)
-                batch_by_engine[engine] = []
                 last_emit_by_engine[engine] = now
 
     while not shutdown.is_set():
         try:
             job = queue_1_2.get(timeout=QUEUE_BLOCK_TIMEOUT)
             batch_by_engine[job.engine].append(job)
-
-            maybe_emit()
-
         except Empty:
-            maybe_emit()
-            continue
+            pass
         except Exception as e:
             if not shutdown.is_set():
                 sys.stderr.write(f"Thread 2 error: {e}\n")
+            continue
+        maybe_emit()
+
+    # On shutdown, fail any jobs still sitting in unflushed batches
+    for batch in batch_by_engine.values():
+        for job in batch:
+            _set_job_status(
+                redis_client, job, "failed", "Worker shutting down"
+            )
+            _safe_remove(job.get_local_img_path(PERO_TEMP_PATH))
 
     sys.stdout.write("Thread 2 (pero-uploader) stopped.\n")
 
 
-# --- Thread 3: Status checker -> download results -> queue_3_4 ---
-def _is_processed(statuses: dict, job: RedisJob) -> bool:
-    s = statuses.get(job.img_name)
-    if isinstance(s, dict) and s.get("state") == "PROCESSED":
-        return True
-    s = statuses.get(job.job_id)
-    return isinstance(s, dict) and s.get("state") == "PROCESSED"
-
-
+# --- Thread 3: queue_2_3 → poll PERO → download results → queue_3_4 ---
 def thread_3_status_checker(
     pero_client: PeroClient, redis_client: redis.Redis
 ) -> None:
-    """Check status
-    - If not done put back
-    - If failed write Redis
-    - If done download and put to queue 4."""
+    def download_and_forward(request_id: str, job: RedisJob) -> None:
+        try:
+            pero_client.download_results(
+                request_id,
+                job.img_name,
+                "txt",
+                job.get_local_txt_path(PERO_TEMP_PATH),
+            )
+            pero_client.download_results(
+                request_id,
+                job.img_name,
+                "alto",
+                job.get_local_alto_path(PERO_TEMP_PATH),
+            )
+            queue_3_4.put(job)
+        except Exception as e:
+            _set_job_status(redis_client, job, "failed", str(e))
+            _safe_remove(job.get_local_txt_path(PERO_TEMP_PATH))
+            _safe_remove(job.get_local_alto_path(PERO_TEMP_PATH))
+
     while not shutdown.is_set():
         try:
-            item = queue_2_3.get(timeout=1)
+            request_id, jobs = queue_2_3.get(timeout=QUEUE_BLOCK_TIMEOUT)
         except Empty:
             continue
+        except Exception as e:
+            if not shutdown.is_set():
+                sys.stderr.write(f"Thread 3 error: {e}\n")
+            continue
 
-        request_id, jobs = item
         try:
             result = pero_client.get_request_status(request_id)
+            time.sleep(1)
         except Exception as e:
             sys.stderr.write(f"Thread 3: get_request_status failed: {e}\n")
             queue_2_3.put((request_id, jobs))
             continue
 
         if result.status == "failure":
-            err = result.message or "Unknown failure"
             for job in jobs:
-                _set_job_status(redis_client, job.job_id, "failed", err)
+                _set_job_status(
+                    redis_client,
+                    job,
+                    "failed",
+                    result.message or "Unknown PERO failure",
+                )
             continue
 
         statuses = result.request_status or {}
-        success_jobs: list[RedisJob] = []
-        failed_jobs: list[RedisJob] = []
-
+        pending: list[RedisJob] = []
         for job in jobs:
             if _is_processed(statuses, job):
-                success_jobs.append(job)
+                download_and_forward(request_id, job)
             else:
-                failed_jobs.append(job)
+                pending.append(job)
 
-        for job in success_jobs:
-            try:
-                pero_client.download_results(
-                    request_id,
-                    job.img_name,
-                    "txt",
-                    job.get_local_txt_path(PERO_TEMP_PATH),
-                )
-                pero_client.download_results(
-                    request_id,
-                    job.img_name,
-                    "alto",
-                    job.get_local_alto_path(PERO_TEMP_PATH),
-                )
-                queue_3_4.put(job)
-            except Exception as e:
-                _set_job_status(redis_client, job.job_id, "failed", str(e))
-                _safe_remove(job.get_local_txt_path(PERO_TEMP_PATH))
-                _safe_remove(job.get_local_alto_path(PERO_TEMP_PATH))
-
-        if failed_jobs:
-            queue_2_3.put((request_id, failed_jobs))
+        if pending:
+            queue_2_3.put((request_id, pending))
 
     sys.stdout.write("Thread 3 (status-checker) stopped.\n")
 
 
-# --- Thread 4: Upload to MinIO -> Redis done ---
+# --- Thread 4: queue_3_4 → upload to MinIO → mark Redis done ---
 def thread_4_minio_writer(
     minio_client: Minio, redis_client: redis.Redis
 ) -> None:
-    """Upload ocr/alto to MinIO, set Redis done, send message."""
     while not shutdown.is_set():
         try:
-            job = queue_3_4.get(timeout=1)
+            job = queue_3_4.get(timeout=QUEUE_BLOCK_TIMEOUT)
         except Empty:
             continue
 
+        txt_path = job.get_local_txt_path(PERO_TEMP_PATH)
+        alto_path = job.get_local_alto_path(PERO_TEMP_PATH)
         try:
-            _set_job_status(redis_client, job.job_id, "uploading_results")
-            minio_client.fput_object(
-                BUCKET,
-                job.txt_object_key,
-                job.get_local_txt_path(PERO_TEMP_PATH),
-            )
-            minio_client.fput_object(
-                BUCKET,
-                job.alto_object_key,
-                job.get_local_alto_path(PERO_TEMP_PATH),
-            )
+            _set_job_status(redis_client, job, "uploading_results")
+            minio_client.fput_object(BUCKET, job.txt_object_key, txt_path)
+            minio_client.fput_object(BUCKET, job.alto_object_key, alto_path)
             redis_client.hset(
                 job.job_key,
                 mapping={
@@ -338,17 +314,18 @@ def thread_4_minio_writer(
                     "minio_alto_key": job.alto_object_key,
                 },
             )
-            sys.stdout.write(f"Job {job.job_id} done.\n")
+            sys.stdout.write(f"Job {job.job_id} done\n")
+            sys.stdout.flush()
         except Exception as e:
-            _set_job_status(redis_client, job.job_id, "failed", str(e))
-            sys.stderr.write(f"Job {job.job_id}: MinIO write failed: {e}\n")
+            _set_job_status(redis_client, job, "failed", str(e))
         finally:
-            _safe_remove(job.get_local_txt_path(PERO_TEMP_PATH))
-            _safe_remove(job.get_local_alto_path(PERO_TEMP_PATH))
+            _safe_remove(txt_path)
+            _safe_remove(alto_path)
+
     sys.stdout.write("Thread 4 (minio-writer) stopped.\n")
 
 
-# --- Cleanup (cron-scheduled) ---
+# --- Cleanup scheduler ---
 def _cleanup_stranded_minio(minio_client: Minio, older_than_sec: int) -> int:
     removed = 0
     cutoff = time.time() - older_than_sec
@@ -378,10 +355,6 @@ def _cleanup_stranded_minio(minio_client: Minio, older_than_sec: int) -> int:
 def thread_cleanup_scheduler(
     minio_client: Minio, cleanup_age: int, cron_expr: str
 ) -> None:
-    """
-    Sleep until cron triggers, then run cleanup
-    """
-
     try:
         cron = croniter(cron_expr, datetime.now())
     except Exception as e:
@@ -391,12 +364,8 @@ def thread_cleanup_scheduler(
     while not shutdown.is_set():
         try:
             next_run = cron.get_next(datetime)
-
-            while not shutdown.is_set():
-                if next_run <= datetime.now():
-                    break
+            while not shutdown.is_set() and datetime.now() < next_run:
                 time.sleep(QUEUE_BLOCK_TIMEOUT)
-
             removed = _cleanup_stranded_minio(minio_client, cleanup_age)
             sys.stdout.write(
                 f"Cleanup: removed {removed} stranded object(s).\n"
@@ -404,81 +373,44 @@ def thread_cleanup_scheduler(
         except Exception as e:
             if not shutdown.is_set():
                 sys.stderr.write(f"Cleanup scheduler error: {e}\n")
+
     sys.stdout.write("Cleanup scheduler stopped.\n")
 
 
+# --- Entry point ---
 def main() -> None:
-    if not os.path.isdir(PERO_TEMP_PATH):
-        os.makedirs(PERO_TEMP_PATH, mode=0o777)
+    os.makedirs(PERO_TEMP_PATH, exist_ok=True)
 
-    parser = argparse.ArgumentParser(
-        description="PERO OCR relay worker (4-thread pipeline, Redis + MinIO)"
-    )
-    parser.add_argument("--server-url", required=True, help="PERO server URL")
-    parser.add_argument("--api-key", required=True, help="PERO API key")
-    parser.add_argument("--redis-url", required=True, help="Redis URL")
+    parser = argparse.ArgumentParser(description="PERO OCR relay worker")
+    parser.add_argument("--server-url", required=True)
+    parser.add_argument("--api-key", required=True)
+    parser.add_argument("--redis-url", required=True)
+    parser.add_argument("--redis-username", default=None)
+    parser.add_argument("--redis-password", default=None)
+    parser.add_argument("--minio-url", required=True)
+    parser.add_argument("--minio-access-key", required=True)
+    parser.add_argument("--minio-secret-key", required=True)
+    parser.add_argument("--minio-secure", action="store_true")
+    parser.add_argument("--batch-min-size", type=int, default=BATCH_MIN_SIZE)
     parser.add_argument(
-        "--redis-username", default=None, help="Redis username"
-    )
-    parser.add_argument(
-        "--redis-password", default=None, help="Redis password"
-    )
-    parser.add_argument("--minio-url", required=True, help="MinIO endpoint")
-    parser.add_argument(
-        "--minio-access-key", required=True, help="MinIO access key"
+        "--batch-max-interval", type=float, default=BATCH_MAX_INTERVAL
     )
     parser.add_argument(
-        "--minio-secret-key", required=True, help="MinIO secret key"
+        "--max-pending-batches", type=int, default=MAX_PENDING_BATCHES
     )
-    parser.add_argument(
-        "--minio-secure", action="store_true", help="Use HTTPS for MinIO"
-    )
-    parser.add_argument(
-        "--batch-min-size",
-        type=int,
-        default=BATCH_MIN_SIZE,
-        help=f"Min batch size for status polling (default: {BATCH_MIN_SIZE})",
-    )
-    parser.add_argument(
-        "--batch-max-interval",
-        type=float,
-        default=BATCH_MAX_INTERVAL,
-        help=f"Max seconds to wait for batch (default: {BATCH_MAX_INTERVAL})",
-    )
-    parser.add_argument(
-        "--max-pending-batches",
-        type=int,
-        default=MAX_PENDING_BATCHES,
-        help=(
-            "Don't emit new batches when status queue has more than this many "
-            f"(backpressure, default: {MAX_PENDING_BATCHES})"
-        ),
-    )
-    parser.add_argument(
-        "--cleanup-age",
-        type=int,
-        default=CLEANUP_AGE_SECONDS,
-        help=(
-            "Remove MinIO objects older than N seconds "
-            f"(default: {CLEANUP_AGE_SECONDS})"
-        ),
-    )
-    parser.add_argument(
-        "--cleanup-cron",
-        default=CLEANUP_CRON_DEFAULT,
-        help=f"Cron for cleanup (default: {CLEANUP_CRON_DEFAULT})",
-    )
+    parser.add_argument("--cleanup-age", type=int, default=CLEANUP_AGE_SECONDS)
+    parser.add_argument("--cleanup-cron", default=CLEANUP_CRON_DEFAULT)
     args = parser.parse_args()
 
     try:
         if args.redis_username or args.redis_password:
             from urllib.parse import urlparse
 
-            parsed = urlparse(args.redis_url)
+            p = urlparse(args.redis_url)
             r = redis.Redis(
-                host=parsed.hostname or "localhost",
-                port=parsed.port or 6379,
-                db=int((parsed.path or "/0").strip("/") or 0),
+                host=p.hostname or "localhost",
+                port=p.port or 6379,
+                db=int((p.path or "/0").strip("/") or 0),
                 username=args.redis_username,
                 password=args.redis_password,
                 decode_responses=True,
@@ -487,21 +419,17 @@ def main() -> None:
             r = redis.Redis.from_url(args.redis_url, decode_responses=True)
         r.ping()
     except Exception as e:
-        sys.stderr.write(f"Redis error: {e}\n")
-        sys.exit(-1)
+        sys.stderr.write(f"Redis connection failed: {e}\n")
+        sys.exit(1)
 
     secure = args.minio_secure or args.minio_url.startswith("https://")
-    endpoint = args.minio_url.replace("https://", "").replace("http://", "")
-    try:
-        minio_client = Minio(
-            endpoint,
-            access_key=args.minio_access_key,
-            secret_key=args.minio_secret_key,
-            secure=secure,
-        )
-    except Exception as e:
-        sys.stderr.write(f"MinIO error: {e}\n")
-        sys.exit(-1)
+    endpoint = args.minio_url.removeprefix("https://").removeprefix("http://")
+    minio_client = Minio(
+        endpoint,
+        access_key=args.minio_access_key,
+        secret_key=args.minio_secret_key,
+        secure=secure,
+    )
 
     pero_client_t2 = PeroClient(args.server_url, args.api_key)
     pero_client_t3 = PeroClient(args.server_url, args.api_key)
@@ -541,6 +469,7 @@ def main() -> None:
     ]
 
     for t in threads:
+        t.daemon = True
         t.start()
 
     try:
@@ -556,8 +485,6 @@ def main() -> None:
         pero_client_t2.close()
         pero_client_t3.close()
         sys.stdout.write("Worker stopped.\n")
-
-    sys.exit(0)
 
 
 if __name__ == "__main__":

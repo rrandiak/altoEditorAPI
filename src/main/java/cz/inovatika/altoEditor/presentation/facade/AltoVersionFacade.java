@@ -13,8 +13,6 @@ import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
-import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
-import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
@@ -45,10 +43,6 @@ public class AltoVersionFacade {
     private final AltoVersionMapper mapper;
 
     private final BatchMapper batchMapper;
-
-    private final ProcessDispatcher processDispatcher;
-
-    private final AltoOcrGeneratorProcessFactory altoOcrGeneratorProcessFactory;
 
     /** Search ALTO versions related to current user (or ACTIVE). */
     public SearchResultsDto<AltoVersionSearchDto> searchRelated(AltoVersionSearchRelatedRequest request) {
@@ -140,12 +134,9 @@ public class AltoVersionFacade {
                 instance != null ? instance : krameriusConfig.getDefaultInstance());
     }
 
-    /** Start per-page ALTO generation batch (selected engine). */
+    /** Start per-page ALTO generation batch (selected engine). Picked up by scheduler. */
     public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
         Batch batch = service.createGenerateAltoBatch(pid, engine, instance == null ? krameriusConfig.getDefaultInstance() : instance, priority, userContext.getUserId());
-
-        processDispatcher.submit(altoOcrGeneratorProcessFactory.create(batch));
-
         return batchMapper.toDto(batch);
     }
 

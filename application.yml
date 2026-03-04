@@ -1,5 +1,8 @@
 application:
   maxProcesses: 5
+  process-scheduling:
+    enabled: true
+    cron: "0/5 * * * * ?"
   max-processes-per-type:
     GENERATE_FOR_HIERARCHY: 4
     GENERATE_SINGLE: 1
@@ -45,6 +48,8 @@ spring:
     url: "${ALTO_EDITOR_JDBC_URL:jdbc:h2:mem:altoEditorTestDb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}"
     username: "${ALTO_EDITOR_JDBC_USERNAME:altoEditor}"
     password: "${ALTO_EDITOR_JDBC_PASSWORD:replaceMe}"
+    hikari:
+      maximum-pool-size: "${ALTO_EDITOR_HIKARI_POOL_SIZE:30}"
   jpa:
     hibernate:
       ddl-auto: "${ALTO_EDITOR_DDL_AUTO:update}"

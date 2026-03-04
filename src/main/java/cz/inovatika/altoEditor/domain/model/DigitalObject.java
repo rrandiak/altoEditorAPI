@@ -41,7 +41,8 @@ import lombok.ToString;
 @Entity
 @Table(name = "object_hierarchy", indexes = {
         @Index(columnList = "uuid"),
-        @Index(columnList = "parent_uuid")
+        @Index(columnList = "parent_uuid"),
+        @Index(columnList = "parent_uuid, model")
 })
 @Data
 @ToString(exclude = { "children" })

@@ -32,6 +32,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -49,7 +50,9 @@ import lombok.NoArgsConstructor;
 @Table(name = "alto_versions", uniqueConstraints = @UniqueConstraint(columnNames = { "uuid",
         "version" }), indexes = {
                 @Index(columnList = "uuid"),
-                @Index(columnList = "user_id")
+                @Index(columnList = "user_id"),
+                @Index(columnList = "uuid, state"),
+                @Index(columnList = "state, user_id")
         })
 @EntityListeners(AuditingEntityListener.class)
 @Data
@@ -68,9 +71,9 @@ public class AltoVersion {
     private Integer id;
 
     /**
-     * Target UUID of the digital object in Kramerius.
+     * Target UUID of the digital object in Kramerius. LAZY to avoid loading when not needed.
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uuid", referencedColumnName = "uuid", nullable = false)
     private DigitalObject digitalObject;
 
@@ -82,9 +85,9 @@ public class AltoVersion {
     private Integer version;
 
     /**
-     * * Owner user of this digital object.
+     * Owner user of this digital object. LAZY to avoid loading when not needed.
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private User user;
 

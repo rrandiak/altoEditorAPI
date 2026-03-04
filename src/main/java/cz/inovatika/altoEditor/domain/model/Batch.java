@@ -17,7 +17,9 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
@@ -36,7 +38,10 @@ import lombok.NoArgsConstructor;
  * - Batch for retrieving hierarchy structure from Kramerius should target PID and instance.
  */
 @Entity
-@Table(name = "batches")
+@Table(name = "batches", indexes = {
+        @Index(columnList = "state"),
+        @Index(columnList = "created_by")
+})
 @EntityListeners(AuditingEntityListener.class)
 @Builder
 @Data
@@ -118,9 +123,10 @@ public class Batch {
     private LocalDateTime updatedAt;
 
     /**
-     * User who created this batch.
+     * User who created this batch. LAZY to avoid N+1 when listing batches;
+     * use JOIN FETCH / EntityGraph when createdBy is needed.
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", referencedColumnName = "id", nullable = false)
     private User createdBy;
 

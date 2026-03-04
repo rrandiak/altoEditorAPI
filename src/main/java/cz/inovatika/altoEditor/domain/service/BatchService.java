@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.domain.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +41,17 @@ public class BatchService {
     @Transactional(readOnly = true)
     public List<Batch> findRunningBatches() {
         return repository.findByStateOrderByIdAsc(BatchState.RUNNING);
+    }
+
+    /**
+     * Claim the oldest PLANNED batch of the given type: set it to RUNNING and return it.
+     * Uses a lock so concurrent planners do not claim the same batch. Returns empty if none planned.
+     */
+    @Transactional
+    public Optional<Batch> claimOldestPlannedBatchByType(BatchType type) {
+        Optional<Batch> opt = repository.findFirstByStateAndTypeOrderByIdAsc(BatchState.PLANNED, type);
+        opt.ifPresent(b -> setState(b, BatchState.RUNNING));
+        return opt;
     }
 
     @Transactional

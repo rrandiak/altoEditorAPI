@@ -12,10 +12,6 @@ import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.service.ObjectHierarchyService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
-import cz.inovatika.altoEditor.infrastructure.process.ProcessDispatcher;
-import cz.inovatika.altoEditor.infrastructure.process.accept.AcceptEngineVersionsProcessFactory;
-import cz.inovatika.altoEditor.infrastructure.process.altoocr.AltoOcrGeneratorProcessFactory;
-import cz.inovatika.altoEditor.infrastructure.process.retrieve.RetrieveHierarchyProcessFactory;
 import cz.inovatika.altoEditor.presentation.dto.request.ObjectHierarchySearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.HierarchySearchDto;
@@ -50,14 +46,6 @@ public class ObjectHierarchyFacade {
     private final UserContextService userContext;
 
     private final BatchMapper batchMapper;
-
-    private final ProcessDispatcher processDispatcher;
-
-    private final RetrieveHierarchyProcessFactory retrieveHierarchyProcessFactory;
-
-    private final AltoOcrGeneratorProcessFactory altoGeneratorProcessFactory;
-
-    private final AcceptEngineVersionsProcessFactory acceptEngineVersionsProcessFactory;
 
     /** Search hierarchy nodes (pagesCount/pagesWithAlto from persisted entity). */
     public SearchResultsDto<HierarchySearchDto> search(ObjectHierarchySearchRequest request) {
@@ -102,40 +90,25 @@ public class ObjectHierarchyFacade {
                 .toList();
     }
 
-    /** Start batch to fetch hierarchy from Kramerius and store locally. */
+    /** Start batch to fetch hierarchy from Kramerius and store locally. Picked up by scheduler. */
     public BatchDto fetchFromKramerius(String pid, String instance, BatchPriority priority) {
         String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
-
         Batch batch = service.createFetchFromKrameriusBatch(pid, finalInstance, priority, userContext.getUserId());
-
-        processDispatcher.submit(retrieveHierarchyProcessFactory.create(batch));
-
         return batchMapper.toDto(batch);
     }
 
-    /** Start batch to generate ALTO for hierarchy rooted at PID. */
+    /** Start batch to generate ALTO for hierarchy rooted at PID. Picked up by scheduler. */
     public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
-        // Validate engine
         enginesProperties.getEngineConfig(engine);
-
         String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
-
         Batch batch = service.createGenerateAltoBatch(pid, engine, finalInstance, priority, userContext.getUserId());
-
-        processDispatcher.submit(altoGeneratorProcessFactory.create(batch));
-
         return batchMapper.toDto(batch);
     }
 
-    /** Start batch to accept the given engine's latest ALTO version for every page in the hierarchy given by provided PID. */
+    /** Start batch to accept the given engine's latest ALTO version for every page in the hierarchy. Picked up by scheduler. */
     public BatchDto acceptEngineVersions(String pid, String engine, BatchPriority priority) {
-        // Validate engine
         enginesProperties.getEngineConfig(engine);
-
         Batch batch = service.createAcceptEngineVersionsBatch(pid, engine, priority, userContext.getUserId());
-
-        processDispatcher.submit(acceptEngineVersionsProcessFactory.create(batch));
-
         return batchMapper.toDto(batch);
     }
 

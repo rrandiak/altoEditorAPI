@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -36,7 +35,9 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private final KrameriusService krameriusService;
 
     private final Long engineUserId;
+    private final String engineName;
     private final EnginesProperties.EngineConfig engineConfig;
+    private final EngineExecutorServiceRegistry executorRegistry;
 
     public AltoOcrGeneratorProcess(
             WorkDirectoryService workDirectoryService,
@@ -44,7 +45,9 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             AltoVersionService altoVersionService,
             KrameriusService krameriusService,
             Long engineUserId,
+            String engineName,
             EnginesProperties.EngineConfig engineConfig,
+            EngineExecutorServiceRegistry executorRegistry,
             Batch batch) {
 
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
@@ -56,7 +59,9 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
         this.krameriusService = krameriusService;
 
         this.engineUserId = engineUserId;
+        this.engineName = engineName;
         this.engineConfig = engineConfig;
+        this.executorRegistry = executorRegistry;
     }
 
     private ExternalProcess createSingleExternalProcess(File workDir, String pid) {
@@ -126,26 +131,22 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
             LOGGER.info("Starting generation of ALTO and OCR for batch {} with {} PIDs", batchId, targetPids.size());
 
-            // Process PIDs in parallel
+            // Process PIDs in parallel using engine-scoped pool
             AtomicInteger processedCount = new AtomicInteger(0);
-            int parallelism = Math.min(engineConfig.getParallelism(), Math.max(1, targetPids.size()));
-            ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+            ExecutorService executor = executorRegistry.getOrCreate(engineName);
 
             List<Future<?>> futures = new ArrayList<>();
             for (String pid : targetPids) {
                 futures.add(executor.submit(() -> processPid(batch, instance, pid, processedCount)));
             }
 
-            // Wait for all PIDs to be processed
+            // Wait for all PIDs to be processed (pool is shared, do not shutdown)
             try {
                 for (Future<?> f : futures) {
                     f.get();
                 }
             } catch (ExecutionException e) {
-                executor.shutdownNow();
                 throw e.getCause() instanceof RuntimeException re ? re : new RuntimeException(e.getCause());
-            } finally {
-                executor.shutdown();
             }
 
             // --- FINISH ---

@@ -1,66 +1,33 @@
 """
 PERO OCR relay client (single document): uploads one image to MinIO,
-enqueues one job to Redis, polls for completion and downloads txt + ALTO to -t / -a paths.
+enqueues one job to Redis, polls for completion,
+downloads txt + ALTO to -t / -a paths.
 Run the worker (pero_local_worker.py) on a host that can reach the PERO server.
 """
 
 import argparse
-import json
 import os
 import sys
 import tempfile
 import uuid
 from time import sleep, time
 
-try:
-    import redis
-except ImportError:
-    sys.stderr.write(
-        "Error: redis package required. Install with: pip install redis\n"
-    )
-    sys.exit(-1)
-try:
-    from minio import Minio
-except ImportError:
-    sys.stderr.write(
-        "Error: minio package required. Install with: pip install minio\n"
-    )
-    sys.exit(-1)
+import redis
+from minio import Minio
 
-from PIL import Image
+from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
+from convert import tiff_to_jpeg
+from models import RedisJob
 
-BUCKET = "pero-jobs"
-QUEUE_KEY = "pero:queue"
-JOB_KEY_PREFIX = "pero:job:"
-POLL_TIMEOUT = 300
-POLL_SLEEP = 0.5
+DEFAULT_JOB_TIMEOUT = 30
+DEFAULT_POLL_INTERVAL = 0.5
+PASS_THROUGH = [".jpg", ".jpeg", ".jp2"]
+CONVERT_FUNCTIONS = {
+    ".tif": tiff_to_jpeg,
+    ".tiff": tiff_to_jpeg,
+}
 
 pero_temp_path = tempfile.mkdtemp(prefix="pero_client_")
-
-
-def get_content_type(file_extension: str) -> str:
-    tiff = [".tiff", ".tif"]
-    jpg = [".jpg", ".jpeg", ".JPG"]
-    jp2 = [".jp2"]
-    if file_extension in tiff:
-        return "image/tiff"
-    if file_extension in jpg:
-        return "image/jpeg"
-    if file_extension in jp2:
-        return "image/jp2"
-    sys.stderr.write(
-        f"Error: the extension {file_extension} is not supported.\n"
-    )
-    sys.exit(-1)
-
-
-def convert_tif(image_path: str) -> str:
-    filename = os.path.splitext(os.path.basename(image_path))[0]
-    output_file = f"{filename}.jpg"
-    with Image.open(image_path) as img:
-        output_path = os.path.join(pero_temp_path, output_file)
-        img.save(output_path, "JPEG", quality=50)
-    return output_path
 
 
 def main():
@@ -71,19 +38,22 @@ def main():
         description="PERO OCR relay client – single document (Redis + MinIO)"
     )
     parser.add_argument(
-        "-i", "--image",
+        "-i",
+        "--image",
         help="Input image path.",
         type=str,
         required=True,
     )
     parser.add_argument(
-        "-t", "--txt",
+        "-t",
+        "--txt",
         help="Output path for OCR txt.",
         type=str,
         required=True,
     )
     parser.add_argument(
-        "-a", "--alto",
+        "-a",
+        "--alto",
         help="Output path for ALTO xml.",
         type=str,
         required=True,
@@ -129,7 +99,19 @@ def main():
         help="Engine to use for OCR (1-7)",
         type=int,
         default=1,
-        choices=range(1, 8),
+        choices=range(MIN_ENGINE_ID, MAX_ENGINE_ID + 1),
+    )
+    parser.add_argument(
+        "--job-timeout",
+        help="Job timeout in seconds",
+        type=int,
+        default=DEFAULT_JOB_TIMEOUT,
+    )
+    parser.add_argument(
+        "--poll-interval",
+        help="Poll interval in seconds",
+        type=int,
+        default=DEFAULT_POLL_INTERVAL,
     )
     args = parser.parse_args()
 
@@ -140,20 +122,19 @@ def main():
     if os.path.exists(args.txt) and os.path.exists(args.alto):
         sys.exit(0)
 
-    img_name = os.path.splitext(os.path.basename(args.image))[0]
     img_path = args.image
+    img_base = os.path.splitext(os.path.basename(img_path))[0]
     ext = os.path.splitext(os.path.basename(img_path))[1].lower()
-    if ext in (".tif", ".tiff"):
-        if os.path.exists(
-            os.path.join(os.path.dirname(img_path), img_name + ".jpg")
-        ):
-            img_path = os.path.join(
-                os.path.dirname(img_path), img_name + ".jpg"
-            )
-            ext = ".jpg"
-        else:
-            img_path = convert_tif(img_path)
-            ext = ".jpg"
+
+    if ext in PASS_THROUGH and os.path.exists(
+        os.path.join(os.path.dirname(img_path), img_base + ".jpg")
+    ):
+        pass
+    elif ext in CONVERT_FUNCTIONS:
+        img_path, ext = CONVERT_FUNCTIONS[ext](img_path)
+    else:
+        sys.stderr.write(f"Error: Unsupported image format: {ext}\n")
+        sys.exit(-1)
 
     # Redis
     try:
@@ -192,50 +173,53 @@ def main():
         sys.stderr.write(f"Error connecting to MinIO: {e}\n")
         sys.exit(-1)
 
-    job_id = str(uuid.uuid4())
-    input_key = f"{job_id}/input{ext}"
+    job = RedisJob(job_id=str(uuid.uuid4()), ext=ext, engine=args.engine)
 
     try:
-        minio_client.fput_object(BUCKET, input_key, img_path)
+        minio_client.fput_object(BUCKET, job.img_object_key, img_path)
     except Exception as e:
         sys.stderr.write(f"Error uploading {img_path} to MinIO: {e}\n")
         sys.exit(-1)
 
-    payload = {
-        "job_id": job_id,
-        "img_name": img_name,
-        "bucket": BUCKET,
-        "input_key": input_key,
-        "engine": args.engine,
-    }
-    r.rpush(QUEUE_KEY, json.dumps(payload))
-    r.hset(JOB_KEY_PREFIX + job_id, mapping={"status": "pending"})
+    # Push job data to queue
+    idx = r.rpush(QUEUE_KEY, job.model_dump_json())
+    timeout_at = time() + args.job_timeout * idx
+    poll_interval = args.poll_interval
 
-    key = JOB_KEY_PREFIX + job_id
-    end = time() + POLL_TIMEOUT
-    while time() < end:
-        status = r.hget(key, "status")
+    # Set job status to pending
+    r.hset(job.job_key, mapping={"status": "pending"})
+
+    while time() < timeout_at:
+        status = r.hget(job.job_key, "status")
+
         if status == "done":
-            txt_key = r.hget(key, "minio_txt_key")
-            alto_key = r.hget(key, "minio_alto_key")
+            txt_key = r.hget(job.job_key, "minio_txt_key")
+            alto_key = r.hget(job.job_key, "minio_alto_key")
+
             if txt_key and alto_key:
                 try:
                     minio_client.fget_object(BUCKET, txt_key, args.txt)
                     minio_client.fget_object(BUCKET, alto_key, args.alto)
                 except Exception as e:
-                    sys.stderr.write(
-                        f"Error downloading results: {e}\n"
-                    )
-                    r.delete(key)
+                    sys.stderr.write(f"Error downloading results: {e}\n")
+                    r.delete(job.job_key)
                     sys.exit(-1)
-            r.delete(key)
+            else:
+                sys.stderr.write("Error: missing results from MinIO\n")
+                r.delete(job.job_key)
+                sys.exit(-1)
+
+            r.delete(job.job_key)
             break
+
         if status == "failed":
-            err = r.hget(key, "error") or "Unknown error"
+            err = r.hget(job.job_key, "error") or "Unknown error"
             sys.stderr.write(f"Job failed: {err}\n")
-            r.delete(key)
+            r.delete(job.job_key)
             sys.exit(-1)
-        sleep(POLL_SLEEP)
+
+        sleep(poll_interval)
+
     else:
         sys.stderr.write("Error: Job did not complete within timeout.\n")
         sys.exit(-1)

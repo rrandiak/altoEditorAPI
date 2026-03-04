@@ -23,6 +23,7 @@ public class AltoOcrGeneratorProcessFactory {
     private final UserService userService;
 
     private final EnginesProperties enginesProperties;
+    private final EngineExecutorServiceRegistry executorRegistry;
 
     public AltoOcrGeneratorProcess create(Batch batch) {
         return new AltoOcrGeneratorProcess(
@@ -31,7 +32,9 @@ public class AltoOcrGeneratorProcessFactory {
                 altoVersionService,
                 krameriusService,
                 userService.getUserByUsername(batch.getEngine()).getId(),
+                batch.getEngine(),
                 enginesProperties.getEngineConfig(batch.getEngine()),
+                executorRegistry,
                 batch);
     }
 }

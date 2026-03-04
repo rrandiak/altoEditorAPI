@@ -11,6 +11,7 @@ import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 @Data
@@ -36,6 +37,7 @@ public class EnginesProperties {
         private String apiKeyArg = "--key";
 
         @NotNull
+        @Min(value = 1, message = "Parallelism must be at least 1")
         private Integer parallelism = 2;
 
         private List<String> additionalArgs = new ArrayList<>();

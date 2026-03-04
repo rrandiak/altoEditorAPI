@@ -8,19 +8,27 @@ WORKDIR /opt/alto-editor
 # Copy pre-built JAR from host target/ (build with mvn package first)
 COPY target/AltoEditor-*.jar ./lib/altoEditor.jar
 
-# Python dependencies for pero-vut.py
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && rm /tmp/requirements.txt
-
 # Set environment variable for application home
 ENV altoeditor.home=/opt/alto-editor
 
 # Copy default application.yml (can be overridden by mounting a custom one)
 COPY src/main/resources/cz/inovatika/altoEditor/application.yml /opt/alto-editor/application.yml
 
-# Pero VUT script: application.yml expected entry /usr/local/bin/pero-vut.py
-COPY src/main/resources/cz/inovatika/altoEditor/pero_vut.py /usr/local/bin/pero-vut.py
-COPY src/main/resources/cz/inovatika/altoEditor/pero_local_client.py /usr/local/bin/pero_local_client.py
+# Pero scripts
+COPY src/main/resources/cz/inovatika/altoEditor/pero-vut/client.py /usr/local/bin/pero-vut/client.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/constants.py /usr/local/bin/pero-distributed/constants.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/convert.py /usr/local/bin/pero-distributed/convert.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/models.py /usr/local/bin/pero-distributed/models.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/pero_client.py /usr/local/bin/pero-distributed/pero_client.py
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/client.py /usr/local/bin/pero-distributed/client.py
+
+# Python dependencies for Pero VUT script
+COPY src/main/resources/cz/inovatika/altoEditor/pero-vut/requirements.txt /tmp/requirements.pero-vut.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.pero-vut.txt --break-system-packages && rm /tmp/requirements.pero-vut.txt
+
+# Python dependencies for Pero Distributed script
+COPY src/main/resources/cz/inovatika/altoEditor/pero-distributed/requirements.txt /tmp/requirements.pero-distributed.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.pero-distributed.txt --break-system-packages && rm /tmp/requirements.pero-distributed.txt
 
 # Expose HTTP port (Spring Boot default 8080)
 EXPOSE 8080

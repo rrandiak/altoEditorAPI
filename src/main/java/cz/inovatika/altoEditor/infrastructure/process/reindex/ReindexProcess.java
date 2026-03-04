@@ -32,7 +32,7 @@ public class ReindexProcess extends BatchProcess {
             EntityManager entityManager,
             TransactionTemplate transactionTemplate,
             Batch batch) {
-        super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
+        super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
         this.batchService = batchService;
         this.entityManager = entityManager;
         this.transactionTemplate = transactionTemplate;

@@ -50,7 +50,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             EngineExecutorServiceRegistry executorRegistry,
             Batch batch) {
 
-        super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
+        super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
 
         this.workDirectoryService = workDirectoryService;
 

@@ -1,4 +1,11 @@
 application:
+  maxProcesses: 5
+  max-processes-per-type:
+    GENERATE_FOR_HIERARCHY: 4
+    GENERATE_SINGLE: 1
+    RETRIEVE_HIERARCHY: 3
+    ACCEPT_ENGINE_VERSIONS: 3
+    REINDEX: 1
   store:
     path: "${ALTO_EDITOR_STORE_PATH:/tmp/altoEditorTestStore}"
     pattern: "xx/xx/xx"

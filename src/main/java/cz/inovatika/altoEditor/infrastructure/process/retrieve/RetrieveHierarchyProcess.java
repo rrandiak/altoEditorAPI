@@ -48,7 +48,7 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             Long krameriusUserId,
             Batch batch) {
 
-        super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
+        super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
         this.batchService = batchService;
         this.krameriusService = krameriusService;
         this.altoVersionService = altoVersionService;

@@ -36,7 +36,7 @@ public class AcceptEngineVersionsProcess extends BatchProcess {
             UserService userService,
             KrameriusService krameriusService,
             Batch batch) {
-        super(batch.getId(), batch.getPriority(), batch.getCreatedAt());
+        super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
 
         this.batchService = batchService;
         this.altoVersionService = altoVersionService;

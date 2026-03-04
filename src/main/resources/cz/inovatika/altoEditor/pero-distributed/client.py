@@ -7,6 +7,7 @@ Run the worker (pero_local_worker.py) on a host that can reach the PERO server.
 
 import argparse
 import os
+import shutil
 import sys
 import tempfile
 import uuid
@@ -189,6 +190,20 @@ def main():
     # Set job status to pending
     r.hset(job.job_key, mapping={"status": "pending"})
 
+    def _cleanup(txt_key: str | None = None, alto_key: str | None = None) -> None:
+        """Remove Redis job, MinIO input image, and optionally result objects."""
+        try:
+            r.delete(job.job_key)
+        except Exception as e:
+            sys.stderr.write(f"Cleanup: Redis {e}\n")
+        for key in (job.img_object_key, txt_key, alto_key):
+            if not key:
+                continue
+            try:
+                minio_client.remove_object(BUCKET, key)
+            except Exception as e:
+                sys.stderr.write(f"Cleanup: MinIO {key}: {e}\n")
+
     while time() < timeout_at:
         status = r.hget(job.job_key, "status")
 
@@ -202,31 +217,32 @@ def main():
                     minio_client.fget_object(BUCKET, alto_key, args.alto)
                 except Exception as e:
                     sys.stderr.write(f"Error downloading results: {e}\n")
-                    r.delete(job.job_key)
+                    _cleanup(txt_key, alto_key)
                     sys.exit(-1)
             else:
                 sys.stderr.write("Error: missing results from MinIO\n")
-                r.delete(job.job_key)
+                _cleanup()
                 sys.exit(-1)
 
-            r.delete(job.job_key)
+            _cleanup(txt_key, alto_key)
             break
 
         if status == "failed":
             err = r.hget(job.job_key, "error") or "Unknown error"
             sys.stderr.write(f"Job failed: {err}\n")
-            r.delete(job.job_key)
+            _cleanup()
             sys.exit(-1)
 
         sleep(poll_interval)
 
     else:
         sys.stderr.write("Error: Job did not complete within timeout.\n")
+        _cleanup()
         sys.exit(-1)
 
     if os.path.isdir(pero_temp_path):
         try:
-            os.rmdir(pero_temp_path)
+            shutil.rmtree(pero_temp_path)
         except OSError:
             pass
 

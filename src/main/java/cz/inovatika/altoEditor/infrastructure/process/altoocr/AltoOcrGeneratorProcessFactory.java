@@ -2,6 +2,8 @@ package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
@@ -24,6 +26,7 @@ public class AltoOcrGeneratorProcessFactory {
 
     private final EnginesProperties enginesProperties;
     private final EngineExecutorServiceRegistry executorRegistry;
+    private final ObjectMapper objectMapper;
 
     public AltoOcrGeneratorProcess create(Batch batch) {
         return new AltoOcrGeneratorProcess(
@@ -35,6 +38,7 @@ public class AltoOcrGeneratorProcessFactory {
                 batch.getEngine(),
                 enginesProperties.getEngineConfig(batch.getEngine()),
                 executorRegistry,
+                objectMapper,
                 batch);
     }
 }

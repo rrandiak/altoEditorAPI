@@ -2,6 +2,7 @@ package cz.inovatika.altoEditor.domain.service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,12 +17,17 @@ import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cz.inovatika.altoEditor.domain.adapter.PidAdapter;
 import cz.inovatika.altoEditor.domain.enums.AltoVersionState;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.enums.Datastream;
 import cz.inovatika.altoEditor.domain.model.AltoVersion;
+import cz.inovatika.altoEditor.domain.model.dto.AltoVersionSearchFilter;
+import cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.model.User;
@@ -64,6 +70,28 @@ public class AltoVersionService {
     private final UserRepository userRepository;
 
     private final BatchRepository batchRepository;
+
+    private final ObjectMapper objectMapper;
+
+    @Transactional(readOnly = true)
+    public SearchResult<AltoVersion> search(AltoVersionSearchFilter filter) {
+        if (filter == null) {
+            filter = AltoVersionSearchFilter.builder().build();
+        }
+        return search(
+                filter.getUsers(),
+                filter.getInstance(),
+                filter.getTargetPid(),
+                filter.getHierarchyPid(),
+                filter.getTitle(),
+                filter.getCreatedAfter(),
+                filter.getCreatedBefore(),
+                filter.getStates(),
+                filter.getOffset(),
+                filter.getLimit(),
+                filter.getSortBy() != null ? filter.getSortBy() : "updatedAt",
+                "ASC".equalsIgnoreCase(filter.getSortOrder()) ? SortOrder.ASC : SortOrder.DESC);
+    }
 
     @Transactional(readOnly = true)
     public SearchResult<AltoVersion> search(
@@ -148,17 +176,95 @@ public class AltoVersionService {
         return query.fetch(offset, limit);
     }
 
+    private static final int ACCEPT_VERSIONS_PAGE_SIZE = 500;
+
+    /**
+     * Returns ALTO version IDs matching the given filter (for ACCEPT_VERSIONS
+     * batch).
+     * Pages through search results; use reasonable filters to avoid loading too
+     * many.
+     */
     @Transactional(readOnly = true)
-    public List<String> distinctPidsByAncestorPid(String ancestorPid) {
-        return Search.session(entityManager)
+    public List<Integer> findVersionIdsByFilter(AltoVersionSearchFilter filter) {
+        if (filter == null || !hasAnyFilter(filter)) {
+            return List.of();
+        }
+        SortOrder order = "ASC".equalsIgnoreCase(filter.getSortOrder()) ? SortOrder.ASC : SortOrder.DESC;
+        String sortBy = filter.getSortBy() != null && !filter.getSortBy().isBlank() ? filter.getSortBy() : "updatedAt";
+        List<Integer> ids = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            SearchResult<AltoVersion> result = search(
+                    filter.getUsers(),
+                    filter.getInstance(),
+                    filter.getTargetPid(),
+                    filter.getHierarchyPid(),
+                    filter.getTitle(),
+                    filter.getCreatedAfter(),
+                    filter.getCreatedBefore(),
+                    filter.getStates(),
+                    offset,
+                    ACCEPT_VERSIONS_PAGE_SIZE,
+                    sortBy,
+                    order);
+            List<AltoVersion> hits = result.hits();
+            for (AltoVersion av : hits) {
+                ids.add(av.getId());
+            }
+            if (hits.size() < ACCEPT_VERSIONS_PAGE_SIZE) {
+                break;
+            }
+            offset += ACCEPT_VERSIONS_PAGE_SIZE;
+        }
+        return ids;
+    }
+
+    private static boolean hasAnyFilter(AltoVersionSearchFilter f) {
+        return (f.getUsers() != null && !f.getUsers().isEmpty())
+                || (f.getInstance() != null && !f.getInstance().isBlank())
+                || (f.getTargetPid() != null && !f.getTargetPid().isBlank())
+                || (f.getHierarchyPid() != null && !f.getHierarchyPid().isBlank())
+                || (f.getTitle() != null && !f.getTitle().isBlank())
+                || f.getCreatedAfter() != null
+                || f.getCreatedBefore() != null
+                || (f.getStates() != null && !f.getStates().isEmpty());
+    }
+
+    /**
+     * Distinct page PIDs under the given ancestor from the search index.
+     * Scope: ALL = all pages; NO_PENDING = exclude PIDs that have PENDING for
+     * engine; NO_PENDING_NOR_ACTIVE = exclude PIDs that have PENDING or ACTIVE for
+     * engine.
+     */
+    @Transactional(readOnly = true)
+    public List<String> distinctPidsByAncestorPid(String ancestorPid, HierarchyGenerateScope scope,
+            String engineUsername) {
+        List<AltoVersion> hits = Search.session(entityManager)
                 .search(AltoVersion.class)
                 .select(f -> f.entity())
-                .where(f -> f.terms().field("ancestorPids").matchingAny(ancestorPid))
-                .fetchAllHits().stream()
-                .map(AltoVersion::getPid)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+                .where(f -> {
+                    var b = f.bool();
+                    b.must(f.terms().field("ancestorPids").matchingAny(ancestorPid));
+
+                    if (scope == HierarchyGenerateScope.ALL || engineUsername == null || engineUsername.isBlank()) {
+                        return b;
+                    }
+
+                    b.must(f.match().field("username").matching(engineUsername));
+
+                    if (scope == HierarchyGenerateScope.NO_PENDING) {
+                        b.mustNot(f.match().field("state").matching(AltoVersionState.PENDING));
+                        return b;
+                    }
+
+                    b.mustNot(f.match().field("state").matching(AltoVersionState.PENDING));
+                    b.mustNot(f.match().field("state").matching(AltoVersionState.ACTIVE));
+
+                    return b;
+                })
+                .fetchAllHits();
+
+        return hits.stream().map(AltoVersion::getPid).filter(Objects::nonNull).distinct().toList();
     }
 
     private UUID parseUuid(String pid) {
@@ -493,14 +599,16 @@ public class AltoVersionService {
      * And its then does the following:
      * - Changes the object's state to 'ACTIVE' (making it the default for editing
      * and viewing).
-     * - Archives previous ACTIVE version for the same PID, if it is not the same as the target ALTO version.
+     * - Archives previous ACTIVE version for the same PID, if it is not the same as
+     * the target ALTO version.
      * - Archives all STALE versions of the same PID.
      */
     public void accept(int versionId) {
         AltoVersion digitalObject = repository.findById(versionId)
                 .orElseThrow(() -> new RuntimeException("ALTO version not found with ID: " + versionId));
 
-        repository.archiveActiveAndStaleVersions(digitalObject.getDigitalObject().getUuid(), digitalObject.getVersion());
+        repository.archiveActiveAndStaleVersions(digitalObject.getDigitalObject().getUuid(),
+                digitalObject.getVersion());
 
         digitalObject.setState(AltoVersionState.ACTIVE);
         repository.save(digitalObject);
@@ -546,6 +654,7 @@ public class AltoVersionService {
         objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
     }
 
+    @Transactional(readOnly = true)
     public AltoVersionUploadContent getAltoVersionUploadContent(int objectId) {
         AltoVersion obj = repository.findById(objectId)
                 .orElseThrow(() -> new RuntimeException("Digital object not found with ID: " + objectId));
@@ -557,5 +666,26 @@ public class AltoVersionService {
         byte[] ocrContent = altoXmlService.convertAltoToOcr(altoContent).getBytes(StandardCharsets.UTF_8);
 
         return new AltoVersionUploadContent(obj.getDigitalObject().getPid(), altoContent, ocrContent);
+    }
+
+    public Batch createAcceptVersionsBatch(AltoVersionSearchFilter filter, BatchPriority priority, Long userId) {
+        String data;
+        try {
+            data = objectMapper.writeValueAsString(filter != null ? filter : AltoVersionSearchFilter.builder().build());
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to serialize accept versions filter", e);
+        }
+        if (filter.getStates() == null || filter.getStates().stream().anyMatch(state -> List.of(AltoVersionState.ARCHIVED, AltoVersionState.REJECTED, AltoVersionState.STALE).contains(state))) {
+            throw new IllegalArgumentException("Only PENDING or ACTIVE ALTO versions can be batch accepted");
+        }
+
+        Batch batch = batchRepository.save(Batch.builder()
+                .type(BatchType.ACCEPT_VERSIONS)
+                .priority(priority)
+                .data(data)
+                .createdBy(userService.getUserById(userId))
+                .build());
+
+        return batch;
     }
 }

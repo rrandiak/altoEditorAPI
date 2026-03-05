@@ -17,8 +17,8 @@ import cz.inovatika.altoEditor.presentation.dto.response.SearchResultsDto;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
 import cz.inovatika.altoEditor.presentation.facade.AltoVersionFacade;
+import cz.inovatika.altoEditor.domain.model.dto.AltoVersionSearchFilter;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
-import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.request.NewAltoVersionRequest;
 import lombok.RequiredArgsConstructor;
 
@@ -41,15 +41,15 @@ public class AltoVersionController {
      * @param request Search criteria (users, instance, PIDs, title, date range,
      *                states)
      *                and pagination (offset, limit) via
-     *                {@link AltoVersionSearchRequest}.
+     *                {@link AltoVersionSearchFilter}.
      * @return Paginated list of ALTO versions matching the criteria.
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CURATOR')")
     public ResponseEntity<SearchResultsDto<AltoVersionSearchDto>> getAltoVersions(
-            @ModelAttribute AltoVersionSearchRequest request) {
+            @ModelAttribute AltoVersionSearchFilter filter) {
 
-        SearchResultsDto<AltoVersionSearchDto> page = facade.searchAll(request);
+        SearchResultsDto<AltoVersionSearchDto> page = facade.searchAll(filter);
 
         return ResponseEntity.ok(page);
     }
@@ -243,6 +243,25 @@ public class AltoVersionController {
         facade.accept(versionId);
 
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Start a batch that accepts ALTO versions matching the given search filter.
+     * Filter criteria (users, instance, targetPid, hierarchyPid, title, states, etc.) are passed in the request body.
+     *
+     * @param filter   Search filter for which ALTO versions to accept (JSON body).
+     * @param priority Optional batch priority.
+     * @return HTTP 200 OK when the batch is queued.
+     */
+    @PostMapping("/accept")
+    @PreAuthorize("hasAuthority('CURATOR')")
+    public ResponseEntity<BatchDto> acceptVersions(
+            @RequestBody AltoVersionSearchFilter filter,
+            @RequestParam(required = false) BatchPriority priority) {
+
+        BatchDto batch = facade.acceptVersions(filter, priority);
+
+        return ResponseEntity.ok(batch);
     }
 
     /**

@@ -13,8 +13,8 @@ import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionWithContent;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
+import cz.inovatika.altoEditor.domain.model.dto.AltoVersionSearchFilter;
 import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRelatedRequest;
-import cz.inovatika.altoEditor.presentation.dto.request.AltoVersionSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionDto;
 import cz.inovatika.altoEditor.presentation.dto.response.AltoVersionSearchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
@@ -67,21 +67,8 @@ public class AltoVersionFacade {
     }
 
     /** Search all ALTO versions (curator; optional filters). */
-    public SearchResultsDto<AltoVersionSearchDto> searchAll(AltoVersionSearchRequest request) {
-        SearchResult<AltoVersion> results = service.search(
-                request.getUsers(),
-                request.getInstance(),
-                request.getTargetPid(),
-                request.getHierarchyPid(),
-                request.getTitle(),
-                request.getCreatedAfter(),
-                request.getCreatedBefore(),
-                request.getStates(),
-                request.getOffset(),
-                request.getLimit(),
-                request.getSortBy(),
-                request.getSortOrder());
-        
+    public SearchResultsDto<AltoVersionSearchDto> searchAll(AltoVersionSearchFilter filter) {
+        SearchResult<AltoVersion> results = service.search(filter);
         return SearchResultsDto.<AltoVersionSearchDto>builder()
                 .items(results.hits().stream().map(mapper::toSearchDto).toList())
                 .total(results.total().hitCount())
@@ -175,5 +162,11 @@ public class AltoVersionFacade {
      */
     public void archive(int versionId) {
         service.archive(versionId);
+    }
+
+    /** Start batch to accept ALTO versions matching the given filter. Picked up by scheduler. */
+    public BatchDto acceptVersions(AltoVersionSearchFilter filter, BatchPriority priority) {
+        Batch batch = service.createAcceptVersionsBatch(filter, priority, userContext.getUserId());
+        return batchMapper.toDto(batch);
     }
 }

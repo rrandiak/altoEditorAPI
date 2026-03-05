@@ -85,6 +85,12 @@ public class BatchService {
         repository.save(batch);
     }
 
+    @Transactional
+    public void setPid(Batch batch, String pid) {
+        batch.setPid(pid);
+        repository.save(batch);
+    }
+
     @Transactional(readOnly = true)
     public Page<Batch> search(String pid,
             BatchState state,

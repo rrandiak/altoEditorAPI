@@ -13,10 +13,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope;
+import cz.inovatika.altoEditor.domain.model.dto.HierarchyGenerateInput;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
@@ -38,6 +42,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private final String engineName;
     private final EnginesProperties.EngineConfig engineConfig;
     private final EngineExecutorServiceRegistry executorRegistry;
+    private final ObjectMapper objectMapper;
 
     public AltoOcrGeneratorProcess(
             WorkDirectoryService workDirectoryService,
@@ -48,6 +53,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             String engineName,
             EnginesProperties.EngineConfig engineConfig,
             EngineExecutorServiceRegistry executorRegistry,
+            ObjectMapper objectMapper,
             Batch batch) {
 
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
@@ -62,6 +68,7 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
         this.engineName = engineName;
         this.engineConfig = engineConfig;
         this.executorRegistry = executorRegistry;
+        this.objectMapper = objectMapper;
     }
 
     private ExternalProcess createSingleExternalProcess(File workDir, String pid) {
@@ -123,9 +130,23 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
             batchService.setState(batch, BatchState.RUNNING);
             batchService.setProcessedItemCount(batch, 0);
 
-            List<String> targetPids = batch.getType() == BatchType.GENERATE_SINGLE
-                    ? List.of(batch.getPid())
-                    : altoVersionService.distinctPidsByAncestorPid(batch.getPid());
+            List<String> targetPids;
+            if (batch.getType() == BatchType.GENERATE_SINGLE) {
+                targetPids = List.of(batch.getPid());
+            } else {
+                HierarchyGenerateScope scope = HierarchyGenerateScope.ALL;
+                if (batch.getData() != null && !batch.getData().isBlank()) {
+                    try {
+                        HierarchyGenerateInput input = objectMapper.readValue(batch.getData(), HierarchyGenerateInput.class);
+                        if (input.getScope() != null) {
+                            scope = input.getScope();
+                        }
+                    } catch (Exception e) {
+                        LOGGER.warn("Could not parse batch data for hierarchy scope, using ALL: {}", e.getMessage());
+                    }
+                }
+                targetPids = altoVersionService.distinctPidsByAncestorPid(batch.getPid(), scope, this.engineName);
+            }
 
             batchService.setEstimatedItemCount(batch, targetPids.size());
 

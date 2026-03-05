@@ -10,11 +10,16 @@ import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cz.inovatika.altoEditor.domain.adapter.PidAdapter;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
+import cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope;
+import cz.inovatika.altoEditor.domain.model.dto.HierarchyGenerateInput;
 import cz.inovatika.altoEditor.domain.model.dto.PageCountStats;
 import cz.inovatika.altoEditor.domain.repository.BatchRepository;
 import cz.inovatika.altoEditor.domain.repository.DigitalObjectRepository;
@@ -38,6 +43,8 @@ public class ObjectHierarchyService {
     private final UserService userService;
 
     private final BatchRepository batchRepository;
+
+    private final ObjectMapper objectMapper;
 
     public SearchResult<DigitalObject> search(String pid, String parentPid, String model, String title, Integer level,
             int offset, int limit, String sortBy, SortOrder sortOrder) {
@@ -212,25 +219,21 @@ public class ObjectHierarchyService {
         return batch;
     }
 
-    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId) {
+    public Batch createGenerateAltoBatch(String pid, String engine, String instance, BatchPriority priority, Long userId, HierarchyGenerateScope scope) {
+        HierarchyGenerateInput input = HierarchyGenerateInput.builder().scope(scope != null ? scope : HierarchyGenerateScope.ALL).build();
+        String data;
+        try {
+            data = objectMapper.writeValueAsString(input);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to serialize hierarchy generate input", e);
+        }
         Batch batch = batchRepository.save(Batch.builder()
                 .type(BatchType.GENERATE_FOR_HIERARCHY)
                 .pid(pid)
                 .engine(engine)
                 .instance(instance)
                 .priority(priority)
-                .createdBy(userService.getUserById(userId))
-                .build());
-
-        return batch;
-    }
-
-    public Batch createAcceptEngineVersionsBatch(String pid, String engine, BatchPriority priority, Long userId) {
-        Batch batch = batchRepository.save(Batch.builder()
-                .type(BatchType.ACCEPT_ENGINE_VERSIONS)
-                .pid(pid)
-                .engine(engine)
-                .priority(priority)
+                .data(data)
                 .createdBy(userService.getUserById(userId))
                 .build());
 

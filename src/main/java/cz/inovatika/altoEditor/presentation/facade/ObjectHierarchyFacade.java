@@ -9,6 +9,7 @@ import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.config.properties.KrameriusProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope;
 import cz.inovatika.altoEditor.domain.model.DigitalObject;
 import cz.inovatika.altoEditor.domain.service.ObjectHierarchyService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
@@ -98,17 +99,10 @@ public class ObjectHierarchyFacade {
     }
 
     /** Start batch to generate ALTO for hierarchy rooted at PID. Picked up by scheduler. */
-    public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority) {
+    public BatchDto generateAlto(String pid, String engine, String instance, BatchPriority priority, HierarchyGenerateScope scope) {
         enginesProperties.getEngineConfig(engine);
         String finalInstance = instance == null ? krameriusConfig.getDefaultInstance() : instance;
-        Batch batch = service.createGenerateAltoBatch(pid, engine, finalInstance, priority, userContext.getUserId());
-        return batchMapper.toDto(batch);
-    }
-
-    /** Start batch to accept the given engine's latest ALTO version for every page in the hierarchy. Picked up by scheduler. */
-    public BatchDto acceptEngineVersions(String pid, String engine, BatchPriority priority) {
-        enginesProperties.getEngineConfig(engine);
-        Batch batch = service.createAcceptEngineVersionsBatch(pid, engine, priority, userContext.getUserId());
+        Batch batch = service.createGenerateAltoBatch(pid, engine, finalInstance, priority, userContext.getUserId(), scope);
         return batchMapper.toDto(batch);
     }
 

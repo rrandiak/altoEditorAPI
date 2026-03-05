@@ -12,6 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,8 @@ class ObjectHierarchyServiceTest {
     @Mock
     private BatchRepository batchRepository;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     private ObjectHierarchyService service;
 
@@ -61,6 +65,7 @@ class ObjectHierarchyServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "objectMapper", objectMapper);
     }
 
     @Nested
@@ -240,22 +245,19 @@ class ObjectHierarchyServiceTest {
     class GenerateAlto {
 
         @Test
-        @DisplayName("saves batch and submits process, returns batch")
-        void savesBatchAndSubmitsProcess() {
-            Batch batch = Batch.builder()
-                    .id(1)
-                    .type(BatchType.GENERATE_FOR_HIERARCHY)
-                    .pid(PAGE_PID)
-                    .priority(BatchPriority.MEDIUM)
-                    .createdBy(USER)
-                    .build();
+        @DisplayName("saves batch with hierarchy scope in data, returns batch")
+        void savesBatchAndReturnsBatch() {
             when(userService.getUserById(USER_ID)).thenReturn(USER);
-            when(batchRepository.save(any(Batch.class))).thenReturn(batch);
+            when(batchRepository.save(any(Batch.class))).thenAnswer(inv -> {
+                Batch b = inv.getArgument(0);
+                b.setId(1);
+                return b;
+            });
 
-            Batch result = service.createGenerateAltoBatch(PAGE_PID,  ENGINE, INSTANCE, BatchPriority.MEDIUM, USER_ID);
+            Batch result = service.createGenerateAltoBatch(PAGE_PID, ENGINE, INSTANCE, BatchPriority.MEDIUM, USER_ID, cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope.ALL);
 
-            assertThat(result).isEqualTo(batch);
             assertThat(result.getType()).isEqualTo(BatchType.GENERATE_FOR_HIERARCHY);
+            assertThat(result.getData()).contains("\"scope\":\"ALL\"");
             assertThat(result.getPid()).isEqualTo(PAGE_PID);
             verify(batchRepository).save(any(Batch.class));
         }

@@ -148,6 +148,12 @@ public class Batch {
     @Column(name = "log", columnDefinition = "TEXT")
     private String log;
 
+    /**
+     * Optional JSON payload for process-specific input (e.g. {@link cz.inovatika.altoEditor.domain.model.dto.HierarchyGenerateInput} for GENERATE_FOR_HIERARCHY).
+     */
+    @Column(name = "data", columnDefinition = "TEXT")
+    private String data;
+
     public UUID getUuid() {
         if (this.pid == null) {
             return null;

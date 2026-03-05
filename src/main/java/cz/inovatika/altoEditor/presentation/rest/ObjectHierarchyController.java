@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
+import cz.inovatika.altoEditor.domain.enums.HierarchyGenerateScope;
 import cz.inovatika.altoEditor.presentation.dto.request.ObjectHierarchySearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.dto.response.HierarchySearchDto;
@@ -106,10 +107,10 @@ public class ObjectHierarchyController {
 
     /**
      * Start a batch job to generate ALTO for the hierarchy rooted at the given PID.
-     * The batch type is {@code GENERATE_FOR_HIERARCHY}; engine is chosen by the process.
+     * Scope: ALL (all target docs), NO_PENDING (skip docs with pending for this engine), NO_PENDING_NOR_ACTIVE (only docs with neither).
      *
      * @param pid     Root object identifier (e.g. monograph UUID).
-     * @param priority Optional batch priority.
+     * @param scope   ALL, NO_PENDING, or NO_PENDING_NOR_ACTIVE (default ALL).
      * @return Created batch DTO.
      */
     @PostMapping("/{pid}/generate-alto/{engine}")
@@ -118,31 +119,10 @@ public class ObjectHierarchyController {
             @PathVariable String pid,
             @PathVariable String engine,
             @RequestParam(required = false) String instance,
-            @RequestParam(required = false) BatchPriority priority) {
+            @RequestParam(required = false) BatchPriority priority,
+            @RequestParam(required = false, defaultValue = "ALL") HierarchyGenerateScope scope) {
 
-        BatchDto batch = facade.generateAlto(pid, engine, instance, priority);
-
-        return ResponseEntity.ok(batch);
-    }
-
-    /**
-     * Start a batch that accepts the given engine's latest ALTO version for every
-     * page in the hierarchy given by provided PID. Only that engine's versions
-     * are promoted to ACTIVE; other versions are not affected.
-     *
-     * @param pid     PID of the document hierarchy (e.g. monograph or periodical).
-     * @param engine  Engine whose latest ALTO versions will be accepted in that hierarchy.
-     * @param priority Optional batch priority.
-     * @return HTTP 200 OK when the batch is queued.
-     */
-    @PostMapping("/{pid}/accept-engine-versions/{engine}")
-    @PreAuthorize("hasAuthority('CURATOR')")
-    public ResponseEntity<BatchDto> acceptEngineVersions(
-            @PathVariable String pid,
-            @PathVariable String engine,
-            @RequestParam(required = false) BatchPriority priority) {
-
-        BatchDto batch = facade.acceptEngineVersions(pid, engine, priority);
+        BatchDto batch = facade.generateAlto(pid, engine, instance, priority, scope);
 
         return ResponseEntity.ok(batch);
     }

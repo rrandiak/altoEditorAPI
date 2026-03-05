@@ -45,6 +45,13 @@ public class AcceptVersionsProcess extends BatchProcess {
             batchService.setProcessedItemCount(batch, 0);
 
             AltoVersionSearchFilter input = parseInput(batch.getData());
+
+            if (input.getTargetPid() != null) {
+                batchService.setPid(batch, input.getTargetPid());
+            } else if (input.getHierarchyPid() != null) {
+                batchService.setPid(batch, input.getHierarchyPid());
+            }
+
             List<Integer> versionIds = altoVersionService.findVersionIdsByFilter(input);
 
             batchService.setEstimatedItemCount(batch, versionIds.size());

@@ -161,12 +161,15 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                 futures.add(executor.submit(() -> processPid(batch, instance, pid, processedCount)));
             }
 
-            // Wait for all PIDs to be processed (pool is shared, do not shutdown)
+            // Wait for all PIDs to be processed; if any fails, cancel remaining and fail the batch
             try {
                 for (Future<?> f : futures) {
                     f.get();
                 }
             } catch (ExecutionException e) {
+                for (Future<?> f : futures) {
+                    f.cancel(true);
+                }
                 throw e.getCause() instanceof RuntimeException re ? re : new RuntimeException(e.getCause());
             }
 

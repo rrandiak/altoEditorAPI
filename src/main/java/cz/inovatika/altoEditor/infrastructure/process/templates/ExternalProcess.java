@@ -14,7 +14,7 @@ public class ExternalProcess implements Runnable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ExternalProcess.class);
     public static final long DEFAULT_TIMEOUT = 2 * 60 * 1000;
-    public static final int DEFAULT_RETRY_ATTEMPTS = 0;
+    public static final int DEFAULT_RETRY_ATTEMPTS = 3;
 
     private AsyncProcess asyncProcess;
 

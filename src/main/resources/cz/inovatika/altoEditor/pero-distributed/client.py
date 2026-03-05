@@ -118,7 +118,7 @@ def main():
 
     if not os.path.exists(args.image):
         sys.stderr.write(f"Error: Image file {args.image} does not exist.\n")
-        sys.exit(-1)
+        sys.exit(-2)
 
     if os.path.exists(args.txt) and os.path.exists(args.alto):
         sys.exit(0)
@@ -135,7 +135,7 @@ def main():
         img_path, ext = CONVERT_FUNCTIONS[ext](img_path)
     else:
         sys.stderr.write(f"Error: Unsupported image format: {ext}\n")
-        sys.exit(-1)
+        sys.exit(-3)
 
     # Redis
     try:
@@ -156,7 +156,7 @@ def main():
         r.ping()
     except Exception as e:
         sys.stderr.write(f"Error connecting to Redis: {e}\n")
-        sys.exit(-1)
+        sys.exit(-4)
 
     # MinIO
     secure = args.minio_secure or args.minio_url.startswith("https://")
@@ -172,7 +172,7 @@ def main():
             minio_client.make_bucket(BUCKET)
     except Exception as e:
         sys.stderr.write(f"Error connecting to MinIO: {e}\n")
-        sys.exit(-1)
+        sys.exit(-5)
 
     job = RedisJob(job_id=str(uuid.uuid4()), ext=ext, engine=args.engine)
 
@@ -180,7 +180,7 @@ def main():
         minio_client.fput_object(BUCKET, job.img_object_key, img_path)
     except Exception as e:
         sys.stderr.write(f"Error uploading {img_path} to MinIO: {e}\n")
-        sys.exit(-1)
+        sys.exit(-6)
 
     # Push job data to queue
     idx = r.rpush(QUEUE_KEY, job.model_dump_json())
@@ -190,8 +190,12 @@ def main():
     # Set job status to pending
     r.hset(job.job_key, mapping={"status": "pending"})
 
-    def _cleanup(txt_key: str | None = None, alto_key: str | None = None) -> None:
-        """Remove Redis job, MinIO input image, and optionally result objects."""
+    def _cleanup(
+        txt_key: str | None = None, alto_key: str | None = None
+    ) -> None:
+        """
+        Remove Redis job, MinIO input image, and optionally result objects.
+        """
         try:
             r.delete(job.job_key)
         except Exception as e:
@@ -218,11 +222,11 @@ def main():
                 except Exception as e:
                     sys.stderr.write(f"Error downloading results: {e}\n")
                     _cleanup(txt_key, alto_key)
-                    sys.exit(-1)
+                    sys.exit(-7)
             else:
                 sys.stderr.write("Error: missing results from MinIO\n")
                 _cleanup()
-                sys.exit(-1)
+                sys.exit(-8)
 
             _cleanup(txt_key, alto_key)
             break
@@ -231,14 +235,14 @@ def main():
             err = r.hget(job.job_key, "error") or "Unknown error"
             sys.stderr.write(f"Job failed: {err}\n")
             _cleanup()
-            sys.exit(-1)
+            sys.exit(-9)
 
         sleep(poll_interval)
 
     else:
         sys.stderr.write("Error: Job did not complete within timeout.\n")
         _cleanup()
-        sys.exit(-1)
+        sys.exit(-10)
 
     if os.path.isdir(pero_temp_path):
         try:

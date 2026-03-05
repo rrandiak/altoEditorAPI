@@ -234,37 +234,50 @@ public class AltoVersionService {
      * Distinct page PIDs under the given ancestor from the search index.
      * Scope: ALL = all pages; NO_PENDING = exclude PIDs that have PENDING for
      * engine; NO_PENDING_NOR_ACTIVE = exclude PIDs that have PENDING or ACTIVE for
-     * engine.
+     * engine. Exclusion is done by two calls: fetch all PIDs, then fetch PIDs
+     * where a version in the excluded state(s) exists for the engine, and filter out.
      */
     @Transactional(readOnly = true)
     public List<String> distinctPidsByAncestorPid(String ancestorPid, HierarchyGenerateScope scope,
             String engineUsername) {
+        List<String> allPids = distinctPidsByAncestorPidAll(ancestorPid);
+
+        if (scope == HierarchyGenerateScope.ALL || engineUsername == null || engineUsername.isBlank()) {
+            return allPids;
+        }
+
+        Set<String> pidsToExclude = distinctPidsWithEngineVersionInStates(ancestorPid, engineUsername, scope);
+        return allPids.stream().filter(pid -> !pidsToExclude.contains(pid)).toList();
+    }
+
+    private List<String> distinctPidsByAncestorPidAll(String ancestorPid) {
+        List<AltoVersion> hits = Search.session(entityManager)
+                .search(AltoVersion.class)
+                .select(f -> f.entity())
+                .where(f -> f.terms().field("ancestorPids").matchingAny(ancestorPid))
+                .fetchAllHits();
+        return hits.stream().map(AltoVersion::getPid).filter(Objects::nonNull).distinct().toList();
+    }
+
+    /** PIDs under ancestor where the engine (username) has a version in the scope’s excluded state(s). */
+    private Set<String> distinctPidsWithEngineVersionInStates(String ancestorPid, String engineUsername,
+            HierarchyGenerateScope scope) {
+        Set<AltoVersionState> excludedStates = scope == HierarchyGenerateScope.NO_PENDING
+                ? Set.of(AltoVersionState.PENDING)
+                : Set.of(AltoVersionState.PENDING, AltoVersionState.ACTIVE);
+
         List<AltoVersion> hits = Search.session(entityManager)
                 .search(AltoVersion.class)
                 .select(f -> f.entity())
                 .where(f -> {
                     var b = f.bool();
                     b.must(f.terms().field("ancestorPids").matchingAny(ancestorPid));
-
-                    if (scope == HierarchyGenerateScope.ALL || engineUsername == null || engineUsername.isBlank()) {
-                        return b;
-                    }
-
                     b.must(f.match().field("username").matching(engineUsername));
-
-                    if (scope == HierarchyGenerateScope.NO_PENDING) {
-                        b.mustNot(f.match().field("state").matching(AltoVersionState.PENDING));
-                        return b;
-                    }
-
-                    b.mustNot(f.match().field("state").matching(AltoVersionState.PENDING));
-                    b.mustNot(f.match().field("state").matching(AltoVersionState.ACTIVE));
-
+                    b.must(f.terms().field("state").matchingAny(excludedStates));
                     return b;
                 })
                 .fetchAllHits();
-
-        return hits.stream().map(AltoVersion::getPid).filter(Objects::nonNull).distinct().toList();
+        return hits.stream().map(AltoVersion::getPid).filter(Objects::nonNull).collect(Collectors.toSet());
     }
 
     private UUID parseUuid(String pid) {

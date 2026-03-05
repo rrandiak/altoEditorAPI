@@ -100,7 +100,10 @@ class PeroClient:
         result_format: str,
         output_path: str,
     ) -> None:
-        """Download txt or alto result to a file. Retries on connection errors (e.g. IncompleteRead)."""
+        """
+        Download txt or alto result to a file.
+        Retries on connection errors (e.g. IncompleteRead).
+        """
         url = self._url(
             "download_results", request_id, file_name, result_format
         )
@@ -128,7 +131,10 @@ class PeroClient:
                     sleep(2 * (attempt + 1))
             except Exception as e:
                 err_msg = str(e)
-                if "IncompleteRead" in err_msg or "Connection broken" in err_msg:
+                if (
+                    "IncompleteRead" in err_msg
+                    or "Connection broken" in err_msg
+                ):
                     last_error = e
                     if attempt < 2:
                         sleep(2 * (attempt + 1))

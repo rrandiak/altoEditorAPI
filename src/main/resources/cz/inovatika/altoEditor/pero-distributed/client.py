@@ -36,7 +36,7 @@ def main():
         os.makedirs(pero_temp_path, mode=0o777)
 
     parser = argparse.ArgumentParser(
-        description="PERO OCR relay client – single document (Redis + MinIO)"
+        description="PERO OCR relay client - single document (Redis + MinIO)"
     )
     parser.add_argument(
         "-i",

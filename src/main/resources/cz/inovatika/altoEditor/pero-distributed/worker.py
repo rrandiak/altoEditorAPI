@@ -45,6 +45,18 @@ queue_3_4: Queue[RedisJob] = Queue(maxsize=500)
 
 
 # --- Helpers ---
+def _ts() -> str:
+    return datetime.now().isoformat()
+
+
+def _log_out(msg: str) -> None:
+    sys.stdout.write(f"{_ts()} {msg.rstrip()}\n")
+
+
+def _log_err(msg: str) -> None:
+    sys.stderr.write(f"{_ts()} {msg.rstrip()}\n")
+
+
 def _set_job_status(
     redis_client: redis.Redis,
     job: RedisJob,
@@ -54,9 +66,9 @@ def _set_job_status(
     mapping = {"status": status}
     if error:
         mapping["error"] = error
-        sys.stderr.write(f"Job {job.job_id}: {status}: {error}\n")
+        _log_err(f"Job {job.job_id}: {status}: {error}")
     else:
-        sys.stdout.write(f"Job {job.job_id}: {status}\n")
+        _log_out(f"Job {job.job_id}: {status}")
     redis_client.hset(job.job_key, mapping=mapping)
 
 
@@ -103,7 +115,7 @@ def thread_1_redis_downloader(
                 try:
                     job = RedisJob.model_validate(json.loads(payload))
                 except Exception as e:
-                    sys.stderr.write(f"Thread 1: invalid job payload: {e}\n")
+                    _log_err(f"Thread 1: invalid job payload: {e}")
                     continue
 
                 if job.engine not in range(MIN_ENGINE_ID, MAX_ENGINE_ID + 1):
@@ -134,9 +146,9 @@ def thread_1_redis_downloader(
 
         except Exception as e:
             if not shutdown.is_set():
-                sys.stderr.write(f"Thread 1 error: {e}\n")
+                _log_err(f"Thread 1 error: {e}")
 
-    sys.stdout.write("Thread 1 (redis-downloader) stopped.\n")
+    _log_out("Thread 1 (redis-downloader) stopped.")
 
 
 # --- Thread 2: queue_1_2 → batch → upload to PERO → queue_2_3 ---
@@ -183,8 +195,8 @@ def thread_2_pero_uploader(
                 _set_job_status(redis_client, job, "processing")
             queue_2_3.put((request_id, accepted))
         else:
-            sys.stderr.write(
-                f"Thread 2: all uploads failed for request {request_id}\n"
+            _log_err(
+                f"Thread 2: all uploads failed for request {request_id}"
             )
 
     def maybe_emit() -> None:
@@ -209,7 +221,7 @@ def thread_2_pero_uploader(
             pass
         except Exception as e:
             if not shutdown.is_set():
-                sys.stderr.write(f"Thread 2 error: {e}\n")
+                _log_err(f"Thread 2 error: {e}")
             continue
         maybe_emit()
 
@@ -221,7 +233,7 @@ def thread_2_pero_uploader(
             )
             _safe_remove(job.get_local_img_path(PERO_TEMP_PATH))
 
-    sys.stdout.write("Thread 2 (pero-uploader) stopped.\n")
+    _log_out("Thread 2 (pero-uploader) stopped.")
 
 
 # --- Thread 3: queue_2_3 → poll PERO → download results → queue_3_4 ---
@@ -255,14 +267,14 @@ def thread_3_status_checker(
             continue
         except Exception as e:
             if not shutdown.is_set():
-                sys.stderr.write(f"Thread 3 error: {e}\n")
+                _log_err(f"Thread 3 error: {e}")
             continue
 
         try:
             result = pero_client.get_request_status(request_id)
             time.sleep(1)
         except Exception as e:
-            sys.stderr.write(f"Thread 3: get_request_status failed: {e}\n")
+            _log_err(f"Thread 3: get_request_status failed: {e}")
             queue_2_3.put((request_id, jobs))
             continue
 
@@ -287,7 +299,7 @@ def thread_3_status_checker(
         if pending:
             queue_2_3.put((request_id, pending))
 
-    sys.stdout.write("Thread 3 (status-checker) stopped.\n")
+    _log_out("Thread 3 (status-checker) stopped.")
 
 
 # --- Thread 4: queue_3_4 → upload to MinIO → mark Redis done ---
@@ -314,7 +326,7 @@ def thread_4_minio_writer(
                     "minio_alto_key": job.alto_object_key,
                 },
             )
-            sys.stdout.write(f"Job {job.job_id} done\n")
+            _log_out(f"Job {job.job_id} done")
             sys.stdout.flush()
         except Exception as e:
             _set_job_status(redis_client, job, "failed", str(e))
@@ -322,7 +334,7 @@ def thread_4_minio_writer(
             _safe_remove(txt_path)
             _safe_remove(alto_path)
 
-    sys.stdout.write("Thread 4 (minio-writer) stopped.\n")
+    _log_out("Thread 4 (minio-writer) stopped.")
 
 
 # --- Cleanup scheduler ---
@@ -344,11 +356,11 @@ def _cleanup_stranded_minio(minio_client: Minio, older_than_sec: int) -> int:
                     minio_client.remove_object(BUCKET, obj.object_name)
                     removed += 1
                 except Exception as e:
-                    sys.stderr.write(
-                        f"Cleanup: failed to remove {obj.object_name}: {e}\n"
+                    _log_err(
+                        f"Cleanup: failed to remove {obj.object_name}: {e}"
                     )
     except Exception as e:
-        sys.stderr.write(f"Cleanup error: {e}\n")
+        _log_err(f"Cleanup error: {e}")
     return removed
 
 
@@ -358,7 +370,7 @@ def thread_cleanup_scheduler(
     try:
         cron = croniter(cron_expr, datetime.now())
     except Exception as e:
-        sys.stderr.write(f"Invalid cleanup cron '{cron_expr}': {e}\n")
+        _log_err(f"Invalid cleanup cron '{cron_expr}': {e}")
         return
 
     while not shutdown.is_set():
@@ -367,14 +379,14 @@ def thread_cleanup_scheduler(
             while not shutdown.is_set() and datetime.now() < next_run:
                 time.sleep(QUEUE_BLOCK_TIMEOUT)
             removed = _cleanup_stranded_minio(minio_client, cleanup_age)
-            sys.stdout.write(
-                f"Cleanup: removed {removed} stranded object(s).\n"
+            _log_out(
+                f"Cleanup: removed {removed} stranded object(s)."
             )
         except Exception as e:
             if not shutdown.is_set():
-                sys.stderr.write(f"Cleanup scheduler error: {e}\n")
+                _log_err(f"Cleanup scheduler error: {e}")
 
-    sys.stdout.write("Cleanup scheduler stopped.\n")
+    _log_out("Cleanup scheduler stopped.")
 
 
 # --- Entry point ---
@@ -419,7 +431,7 @@ def main() -> None:
             r = redis.Redis.from_url(args.redis_url, decode_responses=True)
         r.ping()
     except Exception as e:
-        sys.stderr.write(f"Redis connection failed: {e}\n")
+        _log_err(f"Redis connection failed: {e}")
         sys.exit(1)
 
     secure = args.minio_secure or args.minio_url.startswith("https://")
@@ -484,7 +496,7 @@ def main() -> None:
             t.join(timeout=3)
         pero_client_t2.close()
         pero_client_t3.close()
-        sys.stdout.write("Worker stopped.\n")
+        _log_out("Worker stopped.")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,9 @@ public class AsyncProcess extends Thread {
     private final AtomicReference<Process> refProcess = new AtomicReference<>();
     private final AtomicBoolean done = new AtomicBoolean(false);
     private int exitCode = -1;
-    private OutputConsumer outputConsumer;
+
+    private OutputConsumer stdoutConsumer = null;
+    private OutputConsumer stderrConsumer = null;
 
     public AsyncProcess(List<String> cmdLine) {
         this.cmdLine = cmdLine;
@@ -28,7 +30,6 @@ public class AsyncProcess extends Thread {
     public void run() {
         done.set(false);
         exitCode = -1;
-        outputConsumer = null;
 
         ProcessBuilder pb = new ProcessBuilder(cmdLine);
         pb.redirectErrorStream(true);
@@ -37,12 +38,17 @@ public class AsyncProcess extends Thread {
             Process process = pb.start();
             refProcess.set(process);
 
-            outputConsumer = new OutputConsumer(process.getInputStream());
-            Thread outputThread = new Thread(outputConsumer, "AsyncProcess-OutputConsumer");
-            outputThread.start();
+            stdoutConsumer = new OutputConsumer(process.getInputStream());
+            Thread stdoutThread = new Thread(stdoutConsumer, "AsyncProcess-StdOutConsumer");
+            stdoutThread.start();
+
+            stderrConsumer = new OutputConsumer(process.getInputStream());
+            Thread stderrThread = new Thread(stderrConsumer, "AsyncProcess-StdErrConsumer");
+            stderrThread.start();
 
             exitCode = process.waitFor();
-            outputThread.join();
+            stdoutThread.join();
+            stderrThread.join();
 
             LOGGER.debug("Process done: {}", cmdLine);
         } catch (Exception ex) {
@@ -61,8 +67,23 @@ public class AsyncProcess extends Thread {
         return exitCode;
     }
 
-    public String getOut() {
-        return outputConsumer != null ? outputConsumer.getOutput() : "";
+    public String getStdOut() {
+        return stdoutConsumer != null ? stdoutConsumer.getOutput() : null;
+    }
+
+    public String getStdErr() {
+        return stderrConsumer != null ? stderrConsumer.getOutput() : null;
+    }
+
+    private void waitForOutputConsumer(OutputConsumer consumer, String name) {
+        if (consumer != null) {
+            try {
+                consumer.join();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                LOGGER.error("Interrupted while waiting for " + name, ex);
+            }
+        }
     }
 
     public void kill() {
@@ -78,14 +99,8 @@ public class AsyncProcess extends Thread {
             process.destroy();
             closeProcessStreams(process);
             done.set(true);
-            if (outputConsumer != null) {
-                try {
-                    outputConsumer.join();
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    LOGGER.error("Interrupted while waiting for OutputConsumer", ex);
-                }
-            }
+            waitForOutputConsumer(stderrConsumer, "StdOutConsumer");
+            waitForOutputConsumer(stderrConsumer, "StdErrConsumer");
         }
     }
 

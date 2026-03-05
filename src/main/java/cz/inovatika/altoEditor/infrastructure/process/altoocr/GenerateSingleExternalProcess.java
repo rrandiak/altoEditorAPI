@@ -45,13 +45,18 @@ public class GenerateSingleExternalProcess extends ExternalProcess {
     }
 
     @Override
+    public boolean isOk() {
+        return super.isOk() && outOcrFile.exists() &&
+                outAltoFile.exists() && outAltoFile.length() > 0;
+    }
+
+    @Override
     public long getTimeout() {
         return config.getTimeout();
     }
 
     @Override
-    public boolean isOk() {
-        return super.isOk() && outOcrFile.exists() &&
-                outAltoFile.exists() && outAltoFile.length() > 0;
+    public int getRetryAttempts() {
+        return config.getRetryAttempts();
     }
 }

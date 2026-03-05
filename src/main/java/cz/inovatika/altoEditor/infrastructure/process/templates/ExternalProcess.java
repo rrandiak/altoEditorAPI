@@ -4,6 +4,8 @@ package cz.inovatika.altoEditor.infrastructure.process.templates;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringJoiner;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,14 +27,14 @@ public class ExternalProcess implements Runnable {
     public void run() {
         List<String> cmdLine = buildCmdLine();
         try {
-            int numberOfAttemps = 1;
+            int numberOfAttemps = getRetryAttempts();
             for (int i = 0; i < numberOfAttemps; i++) {
                 runCmdLine(cmdLine);
                 if (isOk()) {
-                    return ;
+                    return;
                 }
-                LOGGER.warn("{}. failure, \n{}, \nCmd: {}",
-                        new Object[]{i + 1, getFullOutput(), cmdLine});
+                LOGGER.warn("Cmd: {}\nAttempt {} failure:\n{}",
+                        new Object[] { cmdLine, i + 1, getFullOutput() });
             }
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
@@ -61,16 +63,16 @@ public class ExternalProcess implements Runnable {
         return asyncProcess.getExitCode();
     }
 
-    public String getOut() {
-        return asyncProcess == null ? null: asyncProcess.getOut();
+    public String getStdOut() {
+        return asyncProcess == null ? null : asyncProcess.getStdOut();
     }
 
-    public String getErr() {
-        return null;
+    public String getStdErr() {
+        return asyncProcess == null ? null : asyncProcess.getStdOut();
     }
 
-    public int getExitCode() {
-        return asyncProcess == null ? -1: asyncProcess.getExitCode();
+    public Integer getExitCode() {
+        return asyncProcess == null ? null : asyncProcess.getExitCode();
     }
 
     public boolean isOk() {
@@ -78,11 +80,20 @@ public class ExternalProcess implements Runnable {
     }
 
     public String getFullOutput() {
-        return String.format("exit: %s,\nout: %s", getExitCode(), getOut());
+        StringJoiner sj = new StringJoiner("\n");
+
+        sj.add("Exit code: " + this.getExitCode());
+        sj.add("StdOut: " + this.getStdOut());
+        sj.add("StdErr: " + this.getStdErr());
+
+        return sj.toString();
     }
 
     public long getTimeout() {
         return DEFAULT_TIMEOUT;
     }
 
+    public int getRetryAttempts() {
+        return DEFAULT_RETRY_ATTEMPTS;
+    }
 }

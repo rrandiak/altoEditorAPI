@@ -81,11 +81,8 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
     private void runExternalProcess(Batch batch, ExternalProcess externalProcess) {
         externalProcess.run();
         if (!externalProcess.isOk()) {
-            throw new RuntimeException(
-                    "Generating ALTO and OCR for PID " + batch.getPid() + " failed:\n" +
-                            "Exit code: " + externalProcess.getExitCode() + "\n" +
-                            "Out: " + externalProcess.getOut() + "\n" +
-                            "Err: " + externalProcess.getErr());
+            throw new RuntimeException("Generating ALTO and OCR for PID " + batch.getPid() + " failed:\n"
+                    + externalProcess.getFullOutput());
         }
     }
 
@@ -137,7 +134,8 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                 HierarchyGenerateScope scope = HierarchyGenerateScope.ALL;
                 if (batch.getData() != null && !batch.getData().isBlank()) {
                     try {
-                        HierarchyGenerateInput input = objectMapper.readValue(batch.getData(), HierarchyGenerateInput.class);
+                        HierarchyGenerateInput input = objectMapper.readValue(batch.getData(),
+                                HierarchyGenerateInput.class);
                         if (input.getScope() != null) {
                             scope = input.getScope();
                         }
@@ -161,7 +159,8 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
                 futures.add(executor.submit(() -> processPid(batch, instance, pid, processedCount)));
             }
 
-            // Wait for all PIDs to be processed; if any fails, cancel remaining and fail the batch
+            // Wait for all PIDs to be processed; if any fails, cancel remaining and fail
+            // the batch
             try {
                 for (Future<?> f : futures) {
                     f.get();

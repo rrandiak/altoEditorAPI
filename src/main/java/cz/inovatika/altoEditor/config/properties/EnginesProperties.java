@@ -55,6 +55,8 @@ public class EnginesProperties {
 
         @NotNull
         private Long timeout = 180_000L;
+        @NotNull
+        private Integer retryAttempts = 3;
 
         public boolean shouldUseApiKey() {
             return apiKey != null && !apiKey.isBlank();

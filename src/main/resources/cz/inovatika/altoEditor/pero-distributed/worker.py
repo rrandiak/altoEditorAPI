@@ -44,6 +44,7 @@ shutdown = threading.Event()
 
 queue_1_2: Queue[RedisJob] = Queue(maxsize=500)
 queue_2_3: Queue[tuple[str, list[RedisJob]]] = Queue(maxsize=100)
+queue_3_repoll: Queue[tuple[str, list[RedisJob], float]] = Queue(maxsize=500)
 queue_3_4: Queue[RedisJob] = Queue(maxsize=500)
 
 
@@ -195,7 +196,7 @@ def thread_1_redis_downloader(
         if raw is None:
             return []
         payloads = [raw[1]]
-        while len(payloads) < queue_1_2.maxsize:
+        while queue_1_2.qsize() + len(payloads) < queue_1_2.maxsize:
             p = redis_client.lpop(QUEUE_KEY)
             if p is None:
                 break
@@ -373,7 +374,28 @@ def thread_3_status_checker(
     pero_client: PeroClient, redis_client: redis.Redis
 ) -> None:
 
-    def fetch_request_status(request_id: str, jobs: list[RedisJob]):
+    def next_batch() -> tuple[str, list[RedisJob], float] | None:
+        """Drain re-polls first; then block on fresh batches."""
+        try:
+            return queue_3_repoll.get_nowait()
+        except Empty:
+            pass
+        try:
+            request_id, jobs = queue_2_3.get(timeout=QUEUE_BLOCK_TIMEOUT)
+            return request_id, jobs, time.monotonic()
+        except Empty:
+            return None
+
+    def repoll(request_id: str, jobs: list[RedisJob], enqueued_at: float) -> None:
+        age = time.monotonic() - enqueued_at
+        if age > IMG_PROCESS_TIMEOUT:
+            _fail_jobs(redis_client, jobs, f"PERO processing timed out after {age:.0f}s")
+        else:
+            _queue_put(
+                queue_3_repoll, (request_id, jobs, enqueued_at), redis_client, jobs, "Thread 3"
+            )
+
+    def fetch_request_status(request_id: str, jobs: list[RedisJob], enqueued_at: float):
         """
         Fetch PERO request status.
         Re-enqueues the batch on network error.
@@ -386,8 +408,8 @@ def thread_3_status_checker(
             return result
         except Exception as e:
             _log_err(f"Thread 3: get_request_status failed: {e}")
-            _queue_putback(
-                queue_2_3, (request_id, jobs), redis_client, jobs, "Thread 3"
+            repoll(
+                request_id, jobs, enqueued_at
             )
             return None
 
@@ -416,8 +438,8 @@ def thread_3_status_checker(
         if download_results(request_id, job):
             _queue_put(queue_3_4, job, redis_client, [job], "Thread 3")
 
-    def handle_batch(request_id: str, jobs: list[RedisJob]) -> None:
-        result = fetch_request_status(request_id, jobs)
+    def handle_batch(request_id: str, jobs: list[RedisJob], enqueued_at: float) -> None:
+        result = fetch_request_status(request_id, jobs, enqueued_at)
         if result is None:
             return  # already re-enqueued or failed inside fetch_request_status
 
@@ -436,25 +458,24 @@ def thread_3_status_checker(
                 pending.append(job)
 
         if pending:
-            _queue_putback(
-                queue_2_3,
-                (request_id, pending),
-                redis_client,
-                pending,
-                "Thread 3",
+            repoll(
+                request_id, pending, enqueued_at
             )
 
     while not shutdown.is_set():
         try:
-            request_id, jobs = queue_2_3.get(timeout=QUEUE_BLOCK_TIMEOUT)
-        except Empty:
-            continue
+            batch = next_batch()
+
+            if batch is None:
+                continue
+
+            request_id, jobs, enqueued_at = batch
+            handle_batch(request_id, jobs, enqueued_at)
+
         except Exception as e:
             if not shutdown.is_set():
                 _log_err(f"Thread 3 error: {e}")
             continue
-
-        handle_batch(request_id, jobs)
 
     _log_out("Thread 3 (status-checker) stopped.")
 

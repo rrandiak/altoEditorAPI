@@ -251,12 +251,7 @@ public class AltoVersionService {
     }
 
     private List<String> distinctPidsByAncestorPidAll(String ancestorPid) {
-        List<AltoVersion> hits = Search.session(entityManager)
-                .search(AltoVersion.class)
-                .select(f -> f.entity())
-                .where(f -> f.terms().field("ancestorPids").matchingAny(ancestorPid))
-                .fetchAllHits();
-        return hits.stream().map(AltoVersion::getPid).filter(Objects::nonNull).distinct().toList();
+        return objectHierarchyService.findDescendantPagePids(ancestorPid);
     }
 
     /** PIDs under ancestor where the engine (username) has a version in the scope’s excluded state(s). */

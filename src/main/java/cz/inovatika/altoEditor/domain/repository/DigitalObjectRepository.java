@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.domain.repository;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -41,6 +42,24 @@ public interface DigitalObjectRepository
             FROM descendants d
             """, nativeQuery = true)
     PageCountStats getDescendantPageStats(@Param("uuid") UUID uuid);
+
+    /**
+     * Returns PIDs of all descendant pages under the given ancestor (recursive).
+     * Includes pages that have no ALTO version yet.
+     */
+    @Query(value = """
+            WITH RECURSIVE descendants (uuid, parent_uuid, model) AS (
+                SELECT uuid, parent_uuid, model
+                FROM object_hierarchy
+                WHERE uuid = :uuid
+                UNION ALL
+                SELECT oh.uuid, oh.parent_uuid, oh.model
+                FROM object_hierarchy oh
+                INNER JOIN descendants d ON oh.parent_uuid = d.uuid
+            )
+            SELECT uuid FROM descendants WHERE model = 'page'
+            """, nativeQuery = true)
+    List<UUID> findDescendantPageUuids(@Param("uuid") UUID uuid);
 
     /**
      * Returns true if the given node has at least one direct child whose model is not {@code page}.

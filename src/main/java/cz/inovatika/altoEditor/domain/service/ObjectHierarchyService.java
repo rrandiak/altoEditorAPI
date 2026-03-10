@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.domain.service;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
 import java.util.UUID;
@@ -83,6 +84,17 @@ public class ObjectHierarchyService {
         }
 
         return searchQuery.fetch(offset, limit);
+    }
+
+    /**
+     * All page PIDs under the given ancestor from object_hierarchy (recursive).
+     */
+    @Transactional
+    public List<String> findDescendantPagePids(String ancestorPid) {
+        UUID ancestorUuid = PidAdapter.toUuid(ancestorPid);
+        return digitalObjectRepository.findDescendantPageUuids(ancestorUuid).stream()
+                .map(uuid -> "uuid:" + uuid)
+                .toList();
     }
 
     /**

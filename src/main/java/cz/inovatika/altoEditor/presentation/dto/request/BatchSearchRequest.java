@@ -14,6 +14,7 @@ import lombok.Data;
 @Data
 public class BatchSearchRequest {
 
+    private String createdBy;
     private String pid;
     private BatchState state;
     private BatchSubstate substate;

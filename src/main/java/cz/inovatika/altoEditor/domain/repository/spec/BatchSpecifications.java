@@ -52,4 +52,8 @@ public class BatchSpecifications {
     public static Specification<Batch> hasInstance(String instance) {
         return (root, query, cb) -> instance == null ? null : cb.equal(root.get("instance"), instance);
     }
+
+    public static Specification<Batch> hasCreatedBy(Long userId) {
+        return (root, query, cb) -> userId == null ? null : cb.equal(root.get("createdBy").get("id"), userId);
+    }
 }

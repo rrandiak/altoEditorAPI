@@ -102,6 +102,7 @@ public class BatchService {
             BatchPriority priority,
             BatchType type,
             String instance,
+            Long createdBy,
             Pageable pageable) {
         Specification<Batch> spec = Specification.allOf(
                 BatchSpecifications.hasPid(pid),
@@ -113,7 +114,8 @@ public class BatchService {
                 BatchSpecifications.updatedBefore(updatedBefore),
                 BatchSpecifications.hasPriority(priority),
                 BatchSpecifications.hasType(type),
-                BatchSpecifications.hasInstance(instance)
+                BatchSpecifications.hasInstance(instance),
+                BatchSpecifications.hasCreatedBy(createdBy)
         );
 
         return repository.findAll(spec, pageable);

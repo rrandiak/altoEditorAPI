@@ -5,7 +5,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import cz.inovatika.altoEditor.domain.model.Batch;
+import cz.inovatika.altoEditor.domain.model.User;
 import cz.inovatika.altoEditor.domain.service.BatchService;
+import cz.inovatika.altoEditor.domain.service.UserService;
 import cz.inovatika.altoEditor.presentation.dto.request.BatchSearchRequest;
 import cz.inovatika.altoEditor.presentation.dto.response.BatchDto;
 import cz.inovatika.altoEditor.presentation.mapper.BatchMapper;
@@ -20,14 +22,23 @@ public class BatchFacade {
 
     private final BatchMapper mapper;
 
+    private final UserService userService;
+
     /** Search batches with filters and Spring pagination. */
     public Page<BatchDto> searchBatches(
             BatchSearchRequest request,
             Pageable pageable) {
+
+        Long createdById = null;
+        if (request.getCreatedBy() != null && !request.getCreatedBy().isBlank()) {
+            User user = userService.getUserByUsername(request.getCreatedBy());
+            createdById = user.getId();
+        }
+
         Page<Batch> page = service.search(request.getPid(), request.getState(), request.getSubstate(),
                 request.getCreatedAfter(), request.getCreatedBefore(), request.getUpdatedAfter(),
                 request.getUpdatedBefore(),
-                request.getPriority(), request.getType(), request.getInstance(), pageable);
+                request.getPriority(), request.getType(), request.getInstance(), createdById, pageable);
 
         return page.map(mapper::toDto);
     }

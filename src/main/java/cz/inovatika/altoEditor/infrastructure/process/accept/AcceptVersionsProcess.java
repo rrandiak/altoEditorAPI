@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.infrastructure.process.accept;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +57,9 @@ public class AcceptVersionsProcess extends BatchProcess {
 
             batchService.setEstimatedItemCount(batch, versionIds.size());
 
+            boolean planObjectIndexing = batch.getPid() == null;
+            List<String> acceptedPids = new ArrayList<>();
+
             for (Integer versionId : versionIds) {
                 AltoVersionUploadContent uploadContent = altoVersionService.getAltoVersionUploadContent(versionId);
 
@@ -63,8 +67,17 @@ public class AcceptVersionsProcess extends BatchProcess {
                         uploadContent.getOcrContent());
 
                 altoVersionService.accept(versionId);
+                if (planObjectIndexing) {
+                    acceptedPids.add(uploadContent.getPid());
+                }
 
                 batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + 1);
+            }
+
+            if (!planObjectIndexing) {
+                krameriusService.planHierarchyIndexing(batch.getPid());
+            } else if (!acceptedPids.isEmpty()) {
+                krameriusService.planObjectIndexing(acceptedPids);
             }
 
             batchService.setState(batch, BatchState.DONE);

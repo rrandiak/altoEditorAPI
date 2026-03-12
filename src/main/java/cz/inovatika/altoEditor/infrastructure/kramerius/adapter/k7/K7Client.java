@@ -464,6 +464,32 @@ public class K7Client implements KrameriusClient {
         }
     }
 
+    public void planObjectIndexing(List<String> pids) {
+        if (pids == null || pids.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < pids.size(); i += config.getIndexBatchSize()) {
+            List<String> batch = pids.subList(i, Math.min(i + config.getIndexBatchSize(), pids.size()));
+            K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.OBJECT, batch);
+
+            ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
+                    token -> webClient.post()
+                            .uri("/search/api/admin/v7.0/processes")
+                            .headers(h -> {
+                                h.setBearerAuth(token);
+                                h.setContentType(MediaType.APPLICATION_JSON);
+                            })
+                            .bodyValue(processDef.toJson())
+                            .retrieve()
+                            .toEntity(K7PlanProcessResponse.class));
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new RuntimeException(
+                        "Failed to plan object indexation for batch of " + batch.size() + " PIDs (offset " + i + "): " + response.getStatusCode());
+            }
+        }
+    }
+
     public void planHierarchyIndexing(String pid) {
         K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.TREE_AND_FOSTER_TREES, pid);
 

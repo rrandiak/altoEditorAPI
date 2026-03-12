@@ -1,5 +1,8 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model;
 
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,7 +17,11 @@ public class K7ReindexProcess {
     private final Params params;
 
     public K7ReindexProcess(ReindexType reindexType, String pid) {
-        this.params = new Params(reindexType, pid);
+        this.params = new Params(reindexType, pid, null);
+    }
+
+    public K7ReindexProcess(ReindexType reindexType, List<String> pids) {
+        this.params = new Params(reindexType, null, pids);
     }
 
     /**
@@ -35,6 +42,7 @@ public class K7ReindexProcess {
 
     @AllArgsConstructor
     @Getter
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Params {
         @JsonProperty("type")
         private final ReindexType reindexType;
@@ -42,5 +50,7 @@ public class K7ReindexProcess {
         @JsonProperty("pid")
         private String pid;
 
+        @JsonProperty("pidlist")
+        private List<String> pidList;
     }
 }

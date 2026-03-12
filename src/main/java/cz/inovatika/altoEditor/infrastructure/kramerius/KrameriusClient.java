@@ -27,5 +27,7 @@ public interface KrameriusClient {
 
     public void planObjectIndexing(String pid);
 
+    public void planObjectIndexing(List<String> pids);
+
     public void planHierarchyIndexing(String pid);
 }

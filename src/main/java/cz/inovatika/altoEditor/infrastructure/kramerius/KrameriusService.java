@@ -80,6 +80,12 @@ public class KrameriusService {
         }
     }
 
+    public void planObjectIndexing(List<String> pids) {
+        for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
+            getClient(instance).planObjectIndexing(pids);
+        }
+    }
+
     public void planHierarchyIndexing(String pid) {
         for (String instance : krameriusConfig.getKrameriusInstances().keySet()) {
             getClient(instance).planHierarchyIndexing(pid);

@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import cz.inovatika.altoEditor.config.properties.BatchProperties;
+import cz.inovatika.altoEditor.domain.adapter.PidAdapter;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.Model;
 import cz.inovatika.altoEditor.domain.model.Batch;
@@ -161,6 +162,7 @@ public class RetrieveHierarchyProcess extends BatchProcess {
                 pool.shutdownNow();
             }
 
+            objectHierarchyService.refreshPageCountsForTarget(PidAdapter.toUuid(originPid));
             batchService.setProcessedItemCount(batch, processed.get());
             batchService.setState(batch, BatchState.DONE);
 
@@ -225,24 +227,26 @@ public class RetrieveHierarchyProcess extends BatchProcess {
     }
 
     private void processOriginItem(KrameriusObjectMetadata m, String instance) {
-        DigitalObject obj = objectHierarchyService.fetchAndStore(m.getPid(), instance);
+        DigitalObject obj = objectHierarchyService.fetchAndStore(m.getPid(), instance, false);
 
         if (Model.PAGE.isModel(m.getModel())) {
             byte[] altoBytes = krameriusService.getAltoBytes(obj.getPid(), instance);
             if (altoBytes != null) {
-                altoVersionService.updateOrCreateKrameriusVersion(obj.getPid(), krameriusUserId, altoBytes);
+                altoVersionService.updateOrCreateKrameriusVersion(obj.getPid(), krameriusUserId, altoBytes, false);
             }
         }
     }
 
     private void processItem(KrameriusObjectMetadata m, String instance, Batch batch, AtomicInteger processed) {
-        DigitalObject obj = objectHierarchyService.store(m);
+        DigitalObject obj = objectHierarchyService.store(m, false);
 
         if (Model.PAGE.isModel(m.getModel())) {
             byte[] altoBytes = krameriusService.getAltoBytes(obj.getPid(), instance);
             if (altoBytes != null) {
-                altoVersionService.updateOrCreateKrameriusVersion(obj.getPid(), krameriusUserId, altoBytes);
+                altoVersionService.updateOrCreateKrameriusVersion(obj.getPid(), krameriusUserId, altoBytes, false);
             }
+        } else {
+            objectHierarchyService.refreshPageCountsForTarget(obj.getUuid());
         }
 
         processed.incrementAndGet();

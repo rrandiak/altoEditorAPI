@@ -472,13 +472,21 @@ public class AltoVersionService {
      */
     @Transactional
     public AltoVersion updateOrCreateKrameriusVersion(String pid, Long userId, byte[] content) {
+        return updateOrCreateKrameriusVersion(pid, userId, content, true);
+    }
+
+    @Transactional
+    public AltoVersion updateOrCreateKrameriusVersion(String pid, Long userId, byte[] content,
+            boolean refreshHierarchyStats) {
         Optional<AltoVersion> altoVersionOpt = repository.findActive(PidAdapter.toUuid(pid));
 
         if (altoVersionOpt.isEmpty()) {
             AltoVersion altoVersion = createNewAltoVersion(pid, userId, content, AltoVersionState.ACTIVE);
             altoVersion.getPresentInInstances().add(userService.getUserById(userId).getUsername());
             repository.save(altoVersion);
-            objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+            if (refreshHierarchyStats) {
+                objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+            }
             return altoVersion;
         }
 
@@ -503,7 +511,9 @@ public class AltoVersionService {
 
         altoVersion.getPresentInInstances().add(instance);
         repository.save(altoVersion);
-        objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+        if (refreshHierarchyStats) {
+            objectHierarchyService.refreshPageCountsForAncestors(PidAdapter.toUuid(pid));
+        }
 
         return altoVersion;
     }

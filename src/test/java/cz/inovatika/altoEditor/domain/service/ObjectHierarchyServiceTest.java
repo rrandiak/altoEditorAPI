@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
@@ -49,6 +51,8 @@ class ObjectHierarchyServiceTest {
     private UserService userService;
     @Mock
     private BatchRepository batchRepository;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -62,10 +66,18 @@ class ObjectHierarchyServiceTest {
     private static final Long USER_ID = 10L;
     private static final User USER = User.builder().id(USER_ID).username("user").build();
 
+    private Optional<DigitalObject> present(DigitalObject object) {
+        return Optional.of(object);
+    }
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "objectMapper", objectMapper);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<Object> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @Nested
@@ -108,14 +120,24 @@ class ObjectHierarchyServiceTest {
                     .build();
             DigitalObject saved = DigitalObject.builder().pid(PAGE_PID).title("Page 1").build();
 
-            when(digitalObjectRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
             when(krameriusService.getObjectMetadata(PAGE_PID, INSTANCE)).thenReturn(metadata);
-            when(digitalObjectRepository.save(any(DigitalObject.class))).thenReturn(saved);
+            when(digitalObjectRepository.insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(), any(),
+                    any(Boolean.class))).thenReturn(1);
+            when(digitalObjectRepository.findById(any(UUID.class))).thenAnswer(new org.mockito.stubbing.Answer<Optional<DigitalObject>>() {
+                private int calls = 0;
+
+                @Override
+                public Optional<DigitalObject> answer(org.mockito.invocation.InvocationOnMock invocation) {
+                    calls++;
+                    return calls == 1 ? Optional.empty() : present(saved);
+                }
+            });
 
             DigitalObject result = service.fetchAndStore(PAGE_PID, INSTANCE);
 
             assertThat(result).isEqualTo(saved);
-            verify(digitalObjectRepository).save(any(DigitalObject.class));
+            verify(digitalObjectRepository).insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(),
+                    any(), any(Boolean.class));
         }
 
         @Test
@@ -143,15 +165,34 @@ class ObjectHierarchyServiceTest {
             DigitalObject rootObj = DigitalObject.builder().pid(ROOT_PID).build();
             DigitalObject leafObj = DigitalObject.builder().pid(PAGE_PID).parent(rootObj).build();
 
-            when(digitalObjectRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
             when(krameriusService.getObjectMetadata(PAGE_PID, INSTANCE)).thenReturn(leafMeta);
             when(krameriusService.getObjectMetadata(ROOT_PID, INSTANCE)).thenReturn(rootMeta);
-            when(digitalObjectRepository.save(any(DigitalObject.class))).thenReturn(rootObj, leafObj);
+            when(digitalObjectRepository.insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(), any(),
+                    any(Boolean.class))).thenReturn(1, 1);
+            when(digitalObjectRepository.findById(any(UUID.class))).thenAnswer(new org.mockito.stubbing.Answer<Optional<DigitalObject>>() {
+                private int rootReads = 0;
+                private int leafReads = 0;
+
+                @Override
+                public Optional<DigitalObject> answer(org.mockito.invocation.InvocationOnMock invocation) {
+                    UUID uuid = invocation.getArgument(0);
+                    if (uuid.equals(rootMeta.getUuid())) {
+                        rootReads++;
+                        return rootReads >= 3 ? present(rootObj) : Optional.empty();
+                    }
+                    if (uuid.equals(leafMeta.getUuid())) {
+                        leafReads++;
+                        return leafReads >= 2 ? present(leafObj) : Optional.empty();
+                    }
+                    return Optional.empty();
+                }
+            });
 
             DigitalObject result = service.fetchAndStore(PAGE_PID, INSTANCE);
 
             assertThat(result).isEqualTo(leafObj);
-            verify(digitalObjectRepository, times(2)).save(any(DigitalObject.class));
+            verify(digitalObjectRepository, times(2)).insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(),
+                    any(), any(), any(Boolean.class));
         }
 
         @Test
@@ -206,12 +247,23 @@ class ObjectHierarchyServiceTest {
             DigitalObject saved = DigitalObject.builder().pid(PAGE_PID).build();
 
             when(digitalObjectRepository.findById(metadata.getUuid())).thenReturn(Optional.empty());
-            when(digitalObjectRepository.save(any(DigitalObject.class))).thenReturn(saved);
+            when(digitalObjectRepository.insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(), any(),
+                    any(Boolean.class))).thenReturn(1);
+            when(digitalObjectRepository.findById(metadata.getUuid())).thenAnswer(new org.mockito.stubbing.Answer<Optional<DigitalObject>>() {
+                private int calls = 0;
+
+                @Override
+                public Optional<DigitalObject> answer(org.mockito.invocation.InvocationOnMock invocation) {
+                    calls++;
+                    return calls == 1 ? Optional.empty() : present(saved);
+                }
+            });
 
             DigitalObject result = service.store(metadata);
 
             assertThat(result).isEqualTo(saved);
-            verify(digitalObjectRepository).save(any(DigitalObject.class));
+            verify(digitalObjectRepository).insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(),
+                    any(), any(Boolean.class));
         }
 
         @Test
@@ -229,14 +281,24 @@ class ObjectHierarchyServiceTest {
                     .build();
             DigitalObject saved = DigitalObject.builder().pid(PAGE_PID).parent(parent).build();
 
-            when(digitalObjectRepository.findById(metadata.getUuid())).thenReturn(Optional.empty());
+            when(digitalObjectRepository.findById(metadata.getUuid())).thenAnswer(new org.mockito.stubbing.Answer<Optional<DigitalObject>>() {
+                private int calls = 0;
+
+                @Override
+                public Optional<DigitalObject> answer(org.mockito.invocation.InvocationOnMock invocation) {
+                    calls++;
+                    return calls == 1 ? Optional.empty() : present(saved);
+                }
+            });
             when(digitalObjectRepository.findById(metadata.getParentUuid())).thenReturn(Optional.of(parent));
-            when(digitalObjectRepository.save(any(DigitalObject.class))).thenReturn(saved);
+            when(digitalObjectRepository.insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(), any(),
+                    any(Boolean.class))).thenReturn(1);
 
             DigitalObject result = service.store(metadata);
 
             assertThat(result).isEqualTo(saved);
-            verify(digitalObjectRepository).save(any(DigitalObject.class));
+            verify(digitalObjectRepository).insertIfAbsent(any(UUID.class), any(), any(), any(), any(), any(), any(),
+                    any(), any(Boolean.class));
         }
     }
 

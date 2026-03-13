@@ -2,6 +2,8 @@ application:
   store:
     path: "${ALTO_EDITOR_STORE_PATH:/tmp/altoEditorTestStore}"
     pattern: "xx/xx/xx"
+    compression: "${ALTO_EDITOR_STORE_COMPRESSION:ZSTD}"
+    compressionLevel: "${ALTO_EDITOR_STORE_COMPRESSION_LEVEL:3}"
   kramerius-instances:
     k7-mzk:
       title: "Kramerius 7 - MZK"

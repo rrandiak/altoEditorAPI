@@ -18,6 +18,8 @@ import org.akubraproject.BlobStore;
 import org.akubraproject.fs.FSBlobStore;
 import org.akubraproject.map.IdMapper;
 import org.akubraproject.map.IdMappingBlobStore;
+import com.github.luben.zstd.ZstdInputStream;
+import com.github.luben.zstd.ZstdOutputStream;
 import org.fcrepo.server.storage.lowlevel.akubra.HashPathIdMapper;
 import java.net.URI;
 
@@ -39,6 +41,8 @@ public class AkubraService {
     private final AltoXmlService altoXmlService;
     
     private final BlockingQueue<Unmarshaller> unmarshallerPool;
+    private final StoreProperties.Compression compression;
+    private final int compressionLevel;
 
     @Autowired
     public AkubraService(StoreProperties config, AltoXmlService altoXmlService) {
@@ -56,6 +60,8 @@ public class AkubraService {
         this.storage = new AkubraLowlevelStorage(null, dsStore, false, true);
 
         this.altoXmlService = altoXmlService;
+        this.compression = config.getCompression();
+        this.compressionLevel = config.getCompressionLevel();
 
         this.unmarshallerPool = new LinkedBlockingQueue<>(config.getUnmarshallerPoolSize());
 
@@ -73,12 +79,61 @@ public class AkubraService {
         return pid + "+" + ds.name() + "+" + ds.name() + "." + version;
     }
 
+    private byte[] compress(byte[] content) {
+        if (compression == StoreProperties.Compression.NONE) {
+            return content;
+        }
+
+        if (compression != StoreProperties.Compression.ZSTD) {
+            throw new IllegalStateException("Unsupported compression type: " + compression);
+        }
+
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZstdOutputStream zstd = new ZstdOutputStream(buffer, compressionLevel)) {
+            zstd.write(content);
+            zstd.flush();
+        } catch (IOException e) {
+            throw new AkubraStorageException("Failed to compress datastream content.", e);
+        }
+        return buffer.toByteArray();
+    }
+
+    private boolean isZstd(byte[] content) {
+        return content.length >= 4
+                && (content[0] & 0xFF) == 0x28
+                && (content[1] & 0xFF) == 0xB5
+                && (content[2] & 0xFF) == 0x2F
+                && (content[3] & 0xFF) == 0xFD;
+    }
+
+    private byte[] decompressIfNeeded(byte[] content) {
+        if (!isZstd(content)) {
+            return content;
+        }
+
+        try (ByteArrayInputStream input = new ByteArrayInputStream(content);
+                ZstdInputStream zstd = new ZstdInputStream(input);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+            byte[] data = new byte[4096];
+            int nRead;
+
+            while ((nRead = zstd.read(data, 0, data.length)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+
+            return buffer.toByteArray();
+        } catch (IOException e) {
+            throw new AkubraStorageException("Failed to decompress datastream content.", e);
+        }
+    }
+
     private void saveDatastreamContent(String pid, Datastream ds, int version, byte[] binaryContent) {
         String dsKey = getDsKey(pid, ds, version);
+        byte[] compressedContent = compress(binaryContent);
 
         if (this.storage.datastreamExists(dsKey)) {
             try {
-                this.storage.replaceDatastream(dsKey, new ByteArrayInputStream(binaryContent));
+                this.storage.replaceDatastream(dsKey, new ByteArrayInputStream(compressedContent));
             } catch (LowlevelStorageException e) {
                 throw new RuntimeException(e);
             }
@@ -86,7 +141,7 @@ public class AkubraService {
         }
 
         try {
-            this.storage.addDatastream(dsKey, new ByteArrayInputStream(binaryContent));
+            this.storage.addDatastream(dsKey, new ByteArrayInputStream(compressedContent));
         } catch (LowlevelStorageException e) {
             throw new RuntimeException(e);
         }
@@ -127,7 +182,7 @@ public class AkubraService {
                 buffer.write(data, 0, nRead);
             }
 
-            return buffer.toByteArray();
+            return decompressIfNeeded(buffer.toByteArray());
         } catch (LowlevelStorageException | IOException e) {
             throw new RuntimeException(e);
         }

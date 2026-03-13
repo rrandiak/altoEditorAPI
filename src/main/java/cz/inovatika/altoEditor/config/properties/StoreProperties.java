@@ -16,6 +16,15 @@ public class StoreProperties {
     private String pattern = "xx";
     @NotNull
     private int unmarshallerPoolSize = 10;
+    @NotNull
+    private Compression compression = Compression.ZSTD;
+    @NotNull
+    private int compressionLevel = 3;
+
+    public enum Compression {
+        NONE,
+        ZSTD
+    }
 
     public String getNormalizedPattern() {
         return pattern.replaceAll("x", "#");

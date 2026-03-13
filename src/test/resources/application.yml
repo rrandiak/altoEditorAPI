@@ -7,6 +7,8 @@ application:
   store:
     path: "/replace/with/temporary/directory/for/tests"
     pattern: "xx/xx/xx"
+    compression: "ZSTD"
+    compressionLevel: 3
   kramerius-instances:
     test:
       title: "Kramerius Test Instance"

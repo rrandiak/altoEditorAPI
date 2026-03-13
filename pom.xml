@@ -319,6 +319,12 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <version>1.5.7-7</version>
+        </dependency>
+
         <!-- Reactor Netty for HTTP client -->
         <dependency>
             <groupId>io.projectreactor.netty</groupId>

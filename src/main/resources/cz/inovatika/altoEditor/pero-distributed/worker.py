@@ -20,10 +20,9 @@ from datetime import datetime, timezone
 from queue import Empty, Full, Queue
 
 import redis
+from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
 from croniter import croniter
 from minio import Minio
-
-from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
 from models import RedisJob
 from pero_client import PeroClient
 
@@ -31,7 +30,7 @@ QUEUE_BLOCK_TIMEOUT = 1
 QUEUE_PUT_TIMEOUT = 60  # avoid blocking forever if downstream queue is full
 REDIS_SOCKET_TIMEOUT = 30  # avoid blocking forever on unresponsive Redis
 REDIS_SOCKET_CONNECT_TIMEOUT = 10
-IMG_PROCESS_TIMEOUT = 120
+IMG_PROCESS_TIMEOUT = 600
 CLEANUP_AGE_SECONDS = 3600
 CLEANUP_CRON_DEFAULT = "*/10 * * * *"
 
@@ -168,15 +167,24 @@ def _queue_putback(
 # ---------------------------------------------------------------------------
 
 
-def _is_processed(statuses: dict, job: RedisJob) -> bool:
+def _get_pero_image_state(statuses: dict, job: RedisJob) -> str | None:
+    """Return the PERO state string for this job's image, or None if not found."""
     for key in (job.img_name, job.job_id, f"{job.job_id}.jpg"):
         s = statuses.get(key)
-        if (
-            isinstance(s, dict)
-            and (s.get("state") or "").upper() == "PROCESSED"
-        ):
-            return True
-    return False
+        if isinstance(s, dict):
+            state = (s.get("state") or "").upper()
+            if state:
+                return state
+    return None
+
+
+def _is_processed(statuses: dict, job: RedisJob) -> bool:
+    return _get_pero_image_state(statuses, job) == "PROCESSED"
+
+
+def _is_pero_failed(statuses: dict, job: RedisJob) -> bool:
+    state = _get_pero_image_state(statuses, job)
+    return state is not None and state not in ("PROCESSED", "WAITING", "PROCESSING", "")
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +260,8 @@ def thread_1_redis_downloader(
                 if shutdown.is_set():
                     break
                 process_payload(payload)
+        except redis.ConnectionError as e:
+            raise e
         except Exception as e:
             if not shutdown.is_set():
                 _log_err(f"Thread 1 error: {e}")
@@ -386,16 +396,28 @@ def thread_3_status_checker(
         except Empty:
             return None
 
-    def repoll(request_id: str, jobs: list[RedisJob], enqueued_at: float) -> None:
+    def repoll(
+        request_id: str, jobs: list[RedisJob], enqueued_at: float
+    ) -> None:
         age = time.monotonic() - enqueued_at
         if age > IMG_PROCESS_TIMEOUT:
-            _fail_jobs(redis_client, jobs, f"PERO processing timed out after {age:.0f}s")
+            _fail_jobs(
+                redis_client,
+                jobs,
+                f"PERO processing timed out after {age:.0f}s",
+            )
         else:
             _queue_put(
-                queue_3_repoll, (request_id, jobs, enqueued_at), redis_client, jobs, "Thread 3"
+                queue_3_repoll,
+                (request_id, jobs, enqueued_at),
+                redis_client,
+                jobs,
+                "Thread 3",
             )
 
-    def fetch_request_status(request_id: str, jobs: list[RedisJob], enqueued_at: float):
+    def fetch_request_status(
+        request_id: str, jobs: list[RedisJob], enqueued_at: float
+    ):
         """
         Fetch PERO request status.
         Re-enqueues the batch on network error.
@@ -408,9 +430,7 @@ def thread_3_status_checker(
             return result
         except Exception as e:
             _log_err(f"Thread 3: get_request_status failed: {e}")
-            repoll(
-                request_id, jobs, enqueued_at
-            )
+            repoll(request_id, jobs, enqueued_at)
             return None
 
     def download_results(request_id: str, job: RedisJob) -> bool:
@@ -438,7 +458,9 @@ def thread_3_status_checker(
         if download_results(request_id, job):
             _queue_put(queue_3_4, job, redis_client, [job], "Thread 3")
 
-    def handle_batch(request_id: str, jobs: list[RedisJob], enqueued_at: float) -> None:
+    def handle_batch(
+        request_id: str, jobs: list[RedisJob], enqueued_at: float
+    ) -> None:
         result = fetch_request_status(request_id, jobs, enqueued_at)
         if result is None:
             return  # already re-enqueued or failed inside fetch_request_status
@@ -454,13 +476,18 @@ def thread_3_status_checker(
         for job in jobs:
             if _is_processed(statuses, job):
                 forward_completed(request_id, job)
+            elif _is_pero_failed(statuses, job):
+                state = _get_pero_image_state(statuses, job)
+                _fail_job(
+                    redis_client,
+                    job,
+                    f"PERO processing failed (state={state})",
+                )
             else:
                 pending.append(job)
 
         if pending:
-            repoll(
-                request_id, pending, enqueued_at
-            )
+            repoll(request_id, pending, enqueued_at)
 
     while not shutdown.is_set():
         try:

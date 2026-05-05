@@ -9,10 +9,10 @@ from pydantic import BaseModel, computed_field
 
 from constants import JOB_KEY_PREFIX
 
-# --- Redis (job queue) ---
+# --- Redis queue payloads ---
 
 
-class RedisJob(BaseModel):
+class IncomingQueueJob(BaseModel):
     """
     Job payload pushed to Redis queue.
     Bucket is fixed, input_key derived from job_id."""
@@ -72,16 +72,12 @@ class RedisJob(BaseModel):
         raise ValueError(f"Unknown extension: {self.ext}")
 
 
-# --- Redis job status (hash pero:job:<job_id>) ---
+class FinalQueueJob(BaseModel):
+    """Queue payload for final queue."""
 
-
-class RedisJobStatus(BaseModel):
-    """Status hash stored in Redis for each job."""
-
-    status: str  # pending, processing, done, failed
+    job_id: str
+    status: str = "done"
     error: Optional[str] = None
-    minio_txt_key: Optional[str] = None
-    minio_alto_key: Optional[str] = None
 
 
 # --- PERO API ---

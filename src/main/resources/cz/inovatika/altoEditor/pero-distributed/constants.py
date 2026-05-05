@@ -1,5 +1,9 @@
 BUCKET = "pero-jobs"
-QUEUE_KEY = "pero:queue"
+QUEUE_INCOMING_KEY = "pero:queue:incoming"
+QUEUE_FINAL_KEY = "pero:queue:final"
 JOB_KEY_PREFIX = "pero:job:"
+REQ_KEY_PREFIX = "pero:req:"
+ACTIVE_REQUESTS_KEY = "pero:active_requests"
+INFLIGHT_IMAGES_KEY = "pero:inflight_images"
 MIN_ENGINE_ID = 1
 MAX_ENGINE_ID = 7

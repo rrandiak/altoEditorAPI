@@ -16,12 +16,18 @@ from time import sleep, time
 import redis
 from minio import Minio
 
-from constants import BUCKET, MAX_ENGINE_ID, MIN_ENGINE_ID, QUEUE_KEY
+from constants import (
+    BUCKET,
+    MAX_ENGINE_ID,
+    MIN_ENGINE_ID,
+    QUEUE_FINAL_KEY,
+    QUEUE_INCOMING_KEY,
+)
 from convert import tiff_to_jpeg
-from models import RedisJob
+from models import IncomingQueueJob
 
-DEFAULT_JOB_TIMEOUT = 60
-DEFAULT_POLL_INTERVAL = 0.5
+DEFAULT_POLL_INTERVAL = 2
+DEFAULT_JOB_TTL_SEC = 3600
 PASS_THROUGH = [".jpg", ".jpeg", ".jp2"]
 CONVERT_FUNCTIONS = {
     ".tif": tiff_to_jpeg,
@@ -103,16 +109,16 @@ def main():
         choices=range(MIN_ENGINE_ID, MAX_ENGINE_ID + 1),
     )
     parser.add_argument(
-        "--job-timeout",
-        help="Job timeout in seconds",
-        type=int,
-        default=DEFAULT_JOB_TIMEOUT,
-    )
-    parser.add_argument(
         "--poll-interval",
         help="Poll interval in seconds",
-        type=int,
+        type=float,
         default=DEFAULT_POLL_INTERVAL,
+    )
+    parser.add_argument(
+        "--job-ttl-sec",
+        help="TTL for the Redis job hash; stranded entries expire after this many seconds",
+        type=int,
+        default=DEFAULT_JOB_TTL_SEC,
     )
     args = parser.parse_args()
 
@@ -124,12 +130,9 @@ def main():
         sys.exit(0)
 
     img_path = args.image
-    img_base = os.path.splitext(os.path.basename(img_path))[0]
     ext = os.path.splitext(os.path.basename(img_path))[1].lower()
 
-    if ext in PASS_THROUGH and os.path.exists(
-        os.path.join(os.path.dirname(img_path), img_base + ".jpg")
-    ):
+    if ext in PASS_THROUGH:
         pass
     elif ext in CONVERT_FUNCTIONS:
         img_path, ext = CONVERT_FUNCTIONS[ext](img_path)
@@ -174,7 +177,7 @@ def main():
         sys.stderr.write(f"Error connecting to MinIO: {e}\n")
         sys.exit(-5)
 
-    job = RedisJob(job_id=str(uuid.uuid4()), ext=ext, engine=args.engine)
+    job = IncomingQueueJob(job_id=str(uuid.uuid4()), ext=ext, engine=args.engine)
 
     try:
         minio_client.fput_object(BUCKET, job.img_object_key, img_path)
@@ -182,24 +185,26 @@ def main():
         sys.stderr.write(f"Error uploading {img_path} to MinIO: {e}\n")
         sys.exit(-6)
 
-    # Push job data to queue
-    idx = r.rpush(QUEUE_KEY, job.model_dump_json())
-    timeout_at = time() + args.job_timeout * idx
+    now = time()
+    # Set job metadata with a TTL so stranded entries self-expire if this process is killed.
+    r.hset(job.job_key, mapping=job.model_dump())
+    r.expire(job.job_key, args.job_ttl_sec)
+    r.zadd(QUEUE_INCOMING_KEY, {job.job_id: now})
     poll_interval = args.poll_interval
-
-    # Set job status to pending
-    r.hset(job.job_key, mapping={"status": "pending"})
 
     def _cleanup(
         txt_key: str | None = None, alto_key: str | None = None
     ) -> None:
-        """
-        Remove Redis job, MinIO input image, and optionally result objects.
-        """
+        """Remove Redis job hash, queue entries, and MinIO objects."""
         try:
             r.delete(job.job_key)
         except Exception as e:
             sys.stderr.write(f"Cleanup: Redis {e}\n")
+        for qk in (QUEUE_INCOMING_KEY, QUEUE_FINAL_KEY):
+            try:
+                r.zrem(qk, job.job_id)
+            except Exception as e:
+                sys.stderr.write(f"Cleanup: Redis queue {qk}: {e}\n")
         for key in (job.img_object_key, txt_key, alto_key):
             if not key:
                 continue
@@ -208,41 +213,33 @@ def main():
             except Exception as e:
                 sys.stderr.write(f"Cleanup: MinIO {key}: {e}\n")
 
-    while time() < timeout_at:
-        status = r.hget(job.job_key, "status")
-
-        if status == "done":
-            txt_key = r.hget(job.job_key, "minio_txt_key")
-            alto_key = r.hget(job.job_key, "minio_alto_key")
-
-            if txt_key and alto_key:
-                try:
-                    minio_client.fget_object(BUCKET, txt_key, args.txt)
-                    minio_client.fget_object(BUCKET, alto_key, args.alto)
-                except Exception as e:
-                    sys.stderr.write(f"Error downloading results: {e}\n")
-                    _cleanup(txt_key, alto_key)
-                    sys.exit(-7)
-            else:
-                sys.stderr.write("Error: missing results from MinIO\n")
-                _cleanup()
-                sys.exit(-8)
-
-            _cleanup(txt_key, alto_key)
-            break
-
-        if status == "failed":
-            err = r.hget(job.job_key, "error") or "Unknown error"
-            sys.stderr.write(f"Job failed: {err}\n")
-            _cleanup()
-            sys.exit(-9)
-
+    # Stage 1: wait while the feeder has not yet picked up the job.
+    while r.zscore(QUEUE_INCOMING_KEY, job.job_id) is not None:
         sleep(poll_interval)
 
-    else:
-        sys.stderr.write("Error: Job did not complete within timeout.\n")
+    # Stage 2: wait until the harvester signals completion via the final queue.
+    while r.zscore(QUEUE_FINAL_KEY, job.job_id) is None:
+        sleep(poll_interval)
+
+    # Read the actual outcome from the job hash.
+    job_data = r.hgetall(job.job_key)
+    status = job_data.get("status")
+    if status != "done":
+        error = job_data.get("error", "unknown error")
+        sys.stderr.write(f"Job finished with status '{status}': {error}\n")
         _cleanup()
-        sys.exit(-10)
+        sys.exit(-9)
+
+    try:
+        minio_client.fget_object(BUCKET, job.txt_object_key, args.txt)
+        minio_client.fget_object(BUCKET, job.alto_object_key, args.alto)
+    except Exception as e:
+        sys.stderr.write(f"Error downloading results: {e}\n")
+        _cleanup(job.txt_object_key, job.alto_object_key)
+        sys.exit(-7)
+
+    # Success: clean up Redis and MinIO so entries don't accumulate.
+    _cleanup(job.txt_object_key, job.alto_object_key)
 
     if os.path.isdir(pero_temp_path):
         try:

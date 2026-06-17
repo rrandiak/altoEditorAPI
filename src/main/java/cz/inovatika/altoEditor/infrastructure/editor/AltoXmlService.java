@@ -31,7 +31,9 @@ public class AltoXmlService {
     private static final String[] ALTO_SCHEMA_PATHS = {
             "/xsd/alto-v2.0.xsd",
             "/xsd/alto-v2.1.xsd",
-            "/xsd/alto-v3.0.xsd"
+            "/xsd/alto-v3.0.xsd",
+            "/xsd/alto-v3.1.xsd",
+            "/xsd/alto-v4.4.xsd"
     };
 
     private final XmlMapper xmlMapper;

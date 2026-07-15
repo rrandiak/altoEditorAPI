@@ -1,4 +1,7 @@
 application:
+  batch:
+    # Per-batch worker pool size (the parallel accept/retrieve fan-out uses workerThreads-1).
+    workerThreads: "${ALTO_EDITOR_WORKER_THREADS:8}"
   store:
     path: "${ALTO_EDITOR_STORE_PATH:/tmp/altoEditorTestStore}"
     pattern: "xx/xx/xx"
@@ -10,6 +13,7 @@ application:
       url: "https://api.kramerius.mzk.cz/"
       serviceClientId: "${ALTO_EDITOR_SERVICE_CLIENT_ID:replaceMe}"
       serviceSecret: "${ALTO_EDITOR_SERVICE_SECRET:replaceMe}"
+      maxConnections: "${ALTO_EDITOR_MAX_CONNECTIONS:32}"
   engines:
     pero-vut:
       exec: "python"

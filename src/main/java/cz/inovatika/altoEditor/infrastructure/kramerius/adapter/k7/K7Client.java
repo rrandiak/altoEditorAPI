@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -28,10 +29,13 @@ import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7Acces
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7AkubraOpResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ObjectMetadataDoc;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7PlanProcessResponse;
+import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ProcessBatch;
+import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7RebuildProcess;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ReindexProcess;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7ReindexProcess.ReindexType;
 import cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7.model.K7UserResponse;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusProcessState;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUserFactory;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.SolrResponse;
@@ -93,23 +97,71 @@ public class K7Client implements KrameriusClient {
     }
 
     /**
-     * Execute a request that uses the service token, retrying once if the token
-     * is no longer valid (401/403). On auth failure the cached token is cleared
-     * and a new one is obtained.
+     * Execute a request that uses the service token, with bounded retries.
+     * <ul>
+     *   <li>401/403: the cached token is cleared and a fresh one is fetched on the
+     *       next attempt (immediate, no backoff).</li>
+     *   <li>5xx / connection errors: treated as transient and retried with a linear
+     *       backoff. All service-token calls here are idempotent (delete tolerates a
+     *       404, upload replaces, reindex is safe to re-plan), so retrying is safe.</li>
+     *   <li>Other 4xx: not retried — thrown immediately.</li>
+     * </ul>
      */
     private <T> ResponseEntity<T> exchangeWithServiceToken(
             Function<String, Mono<ResponseEntity<T>>> requestSupplier) {
-        String token = getServiceToken();
-        try {
-            return requestSupplier.apply(token).block();
-        } catch (WebClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
-                synchronized (this) {
-                    serviceToken = null;
-                }
+        int maxAttempts = Math.max(1, config.getRetryMaxAttempts());
+        RuntimeException lastError = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            boolean authRefresh = false;
+            try {
                 return requestSupplier.apply(getServiceToken()).block();
+            } catch (WebClientResponseException e) {
+                if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
+                    synchronized (this) {
+                        serviceToken = null;
+                    }
+                    authRefresh = true;
+                    lastError = e;
+                } else if (e.getStatusCode().is5xxServerError()) {
+                    // A 5xx whose body is a FileNotFoundException is not transient — the
+                    // underlying datastream genuinely doesn't exist. Don't retry; let the
+                    // caller interpret it (e.g. getAltoBytes treats it as "no ALTO").
+                    if (e.getResponseBodyAsString().contains("java.io.FileNotFoundException")) {
+                        throw e;
+                    }
+                    log.warn("Transient {} from Kramerius {} (attempt {}/{}): {}",
+                            e.getStatusCode(), config.getTitle(), attempt, maxAttempts, e.getResponseBodyAsString());
+                    lastError = e;
+                } else {
+                    // Non-retryable 4xx (other than the auth/404 cases above): surface the
+                    // Kramerius response body — it carries the actual reason (e.g. why a
+                    // createManagedDatastream is rejected with 400).
+                    if (e.getStatusCode() != HttpStatus.NOT_FOUND) {
+                        log.warn("Non-retryable {} from Kramerius {}: {}",
+                                e.getStatusCode(), config.getTitle(), e.getResponseBodyAsString());
+                    }
+                    throw e;
+                }
+            } catch (WebClientRequestException e) {
+                log.warn("Connection error to Kramerius {} (attempt {}/{}): {}",
+                        config.getTitle(), attempt, maxAttempts, e.getMessage());
+                lastError = e;
             }
-            throw e;
+
+            if (attempt < maxAttempts && !authRefresh) {
+                sleepBackoff(attempt);
+            }
+        }
+        throw lastError;
+    }
+
+    private void sleepBackoff(int attempt) {
+        try {
+            Thread.sleep((long) config.getRetryBackoffMillis() * attempt);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while backing off before a Kramerius retry", ie);
         }
     }
 
@@ -356,13 +408,16 @@ public class K7Client implements KrameriusClient {
 
             return response.getBody();
         } catch (WebClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
-                String body = e.getResponseBodyAsString();
-                if (body != null && body.contains("not found in repository")) {
-                    return null;
-                }
-                throw new RuntimeException(
-                        "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle(), e);
+            // Treat a genuinely-missing ALTO datastream as "no ALTO" rather than an error:
+            //  - 404 with the "not found in repository" message, or
+            //  - 500 whose body carries a java.io.FileNotFoundException (the datastream
+            //    file is absent at the akubra/storage layer).
+            String body = e.getResponseBodyAsString();
+            boolean altoMissing =
+                    (e.getStatusCode() == HttpStatus.NOT_FOUND && body != null && body.contains("not found in repository"))
+                    || (body != null && body.contains("java.io.FileNotFoundException"));
+            if (altoMissing) {
+                return null;
             }
             throw new RuntimeException(
                     "Failed to get alto bytes for PID " + pid + " from Kramerius " + config.getTitle(), e);
@@ -468,25 +523,22 @@ public class K7Client implements KrameriusClient {
         if (pids == null || pids.isEmpty()) {
             return;
         }
-        for (int i = 0; i < pids.size(); i += config.getIndexBatchSize()) {
-            List<String> batch = pids.subList(i, Math.min(i + config.getIndexBatchSize(), pids.size()));
-            K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.OBJECT, batch);
+        K7ReindexProcess processDef = new K7ReindexProcess(ReindexType.OBJECT, pids);
 
-            ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
-                    token -> webClient.post()
-                            .uri("/search/api/admin/v7.0/processes")
-                            .headers(h -> {
-                                h.setBearerAuth(token);
-                                h.setContentType(MediaType.APPLICATION_JSON);
-                            })
-                            .bodyValue(processDef.toJson())
-                            .retrieve()
-                            .toEntity(K7PlanProcessResponse.class));
+        ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
+                token -> webClient.post()
+                        .uri("/search/api/admin/v7.0/processes")
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setContentType(MediaType.APPLICATION_JSON);
+                        })
+                        .bodyValue(processDef.toJson())
+                        .retrieve()
+                        .toEntity(K7PlanProcessResponse.class));
 
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException(
-                        "Failed to plan object indexation for batch of " + batch.size() + " PIDs (offset " + i + "): " + response.getStatusCode());
-            }
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new RuntimeException(
+                    "Failed to plan object indexation for " + pids.size() + " PIDs: " + response.getStatusCode());
         }
     }
 
@@ -507,5 +559,53 @@ public class K7Client implements KrameriusClient {
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new RuntimeException("Failed to plan hierarchy indexation for PID " + pid);
         }
+    }
+
+    @Override
+    public String planRebuildProcessingIndex(String target) {
+        K7RebuildProcess processDef = new K7RebuildProcess(target);
+
+        ResponseEntity<K7PlanProcessResponse> response = exchangeWithServiceToken(
+                token -> webClient.post()
+                        .uri("/search/api/admin/v7.0/processes")
+                        .headers(h -> {
+                            h.setBearerAuth(token);
+                            h.setContentType(MediaType.APPLICATION_JSON);
+                        })
+                        .bodyValue(processDef.toJson())
+                        .retrieve()
+                        .toEntity(K7PlanProcessResponse.class));
+
+        K7PlanProcessResponse body = response.getBody();
+        if (!response.getStatusCode().is2xxSuccessful() || body == null) {
+            throw new RuntimeException("Failed to plan processing-index rebuild for target " + target);
+        }
+
+        String processUuid = body.getUuid() != null ? body.getUuid() : body.getId();
+        if (processUuid == null) {
+            throw new RuntimeException("Kramerius did not return a process id for rebuild of target " + target);
+        }
+        return processUuid;
+    }
+
+    @Override
+    public KrameriusProcessState getProcessState(String processUuid) {
+        ResponseEntity<K7ProcessBatch> response = exchangeWithServiceToken(
+                token -> webClient.get()
+                        .uri("/search/api/admin/v7.0/processes/by_process_uuid/{uuid}", processUuid)
+                        .headers(h -> h.setBearerAuth(token))
+                        .retrieve()
+                        .toEntity(K7ProcessBatch.class));
+
+        K7ProcessBatch body = response.getBody();
+        if (body == null || body.getProcess() == null || body.getProcess().getState() == null) {
+            return KrameriusProcessState.RUNNING;
+        }
+
+        return switch (body.getProcess().getState().toUpperCase()) {
+            case "FINISHED", "WARNING" -> KrameriusProcessState.FINISHED;
+            case "FAILED", "KILLED" -> KrameriusProcessState.FAILED;
+            default -> KrameriusProcessState.RUNNING;
+        };
     }
 }

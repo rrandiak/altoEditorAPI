@@ -622,6 +622,20 @@ public class AltoVersionService {
      * - Archives all STALE versions of the same PID.
      */
     public void accept(int versionId) {
+        accept(versionId, true);
+    }
+
+    /**
+     * Accept an ALTO version, optionally refreshing the ancestor page-count stats.
+     *
+     * <p>Batch accept paths pass {@code refreshHierarchyStats = false} and instead
+     * recompute the affected ancestors once, after all versions have been accepted,
+     * via {@link ObjectHierarchyService#refreshPageCountsForAcceptedPages}. This
+     * avoids the per-page root walk (and its lost-update contention) under parallel
+     * accepts.
+     */
+    @Transactional
+    public void accept(int versionId, boolean refreshHierarchyStats) {
         AltoVersion digitalObject = repository.findById(versionId)
                 .orElseThrow(() -> new RuntimeException("ALTO version not found with ID: " + versionId));
 
@@ -631,7 +645,9 @@ public class AltoVersionService {
         digitalObject.setState(AltoVersionState.ACTIVE);
         repository.save(digitalObject);
 
-        objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
+        if (refreshHierarchyStats) {
+            objectHierarchyService.refreshPageCountsForAncestors(digitalObject.getDigitalObject().getUuid());
+        }
     }
 
     /**

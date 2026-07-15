@@ -2,14 +2,23 @@ package cz.inovatika.altoEditor.infrastructure.process.accept;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import cz.inovatika.altoEditor.config.properties.BatchProperties;
+import cz.inovatika.altoEditor.domain.adapter.PidAdapter;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.model.Batch;
 import cz.inovatika.altoEditor.domain.model.dto.AltoVersionSearchFilter;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
+import cz.inovatika.altoEditor.domain.service.ObjectHierarchyService;
 import cz.inovatika.altoEditor.domain.service.container.AltoVersionUploadContent;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
@@ -18,15 +27,21 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AcceptVersionsProcess extends BatchProcess {
 
+    private static final int PROGRESS_EVERY_N_ITEMS = 25;
+
     private final BatchService batchService;
     private final AltoVersionService altoVersionService;
     private final KrameriusService krameriusService;
+    private final ObjectHierarchyService objectHierarchyService;
+    private final BatchProperties batchProperties;
     private final ObjectMapper objectMapper;
 
     public AcceptVersionsProcess(
             BatchService batchService,
             AltoVersionService altoVersionService,
             KrameriusService krameriusService,
+            ObjectHierarchyService objectHierarchyService,
+            BatchProperties batchProperties,
             ObjectMapper objectMapper,
             Batch batch) {
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
@@ -34,12 +49,17 @@ public class AcceptVersionsProcess extends BatchProcess {
         this.batchService = batchService;
         this.altoVersionService = altoVersionService;
         this.krameriusService = krameriusService;
+        this.objectHierarchyService = objectHierarchyService;
+        this.batchProperties = batchProperties;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public void run() {
         Batch batch = batchService.getById(batchId);
+
+        int workers = Math.max(1, batchProperties.getWorkerThreads() - 1);
+        ExecutorService pool = Executors.newFixedThreadPool(workers);
 
         try {
             batchService.setState(batch, BatchState.RUNNING);
@@ -57,28 +77,40 @@ public class AcceptVersionsProcess extends BatchProcess {
 
             batchService.setEstimatedItemCount(batch, versionIds.size());
 
-            boolean planObjectIndexing = batch.getPid() == null;
-            List<String> acceptedPids = new ArrayList<>();
-
+            // Accept each version in parallel: each task uploads ALTO/OCR to Kramerius
+            // then flips the version to ACTIVE. Ancestor page-count stats are refreshed
+            // once, after the pool drains (see refreshPageCountsForAcceptedPages).
+            AtomicInteger processed = new AtomicInteger(0);
+            List<Future<String>> futures = new ArrayList<>();
             for (Integer versionId : versionIds) {
-                AltoVersionUploadContent uploadContent = altoVersionService.getAltoVersionUploadContent(versionId);
+                futures.add(pool.submit(() -> acceptVersion(batch, versionId, processed)));
+            }
 
-                krameriusService.uploadAltoOcr(uploadContent.getPid(), uploadContent.getAltoContent(),
-                        uploadContent.getOcrContent());
-
-                altoVersionService.accept(versionId);
-                if (planObjectIndexing) {
-                    acceptedPids.add(uploadContent.getPid());
+            List<String> acceptedPids = new ArrayList<>();
+            List<UUID> acceptedPageUuids = new ArrayList<>();
+            try {
+                for (Future<String> future : futures) {
+                    String pid = future.get();
+                    acceptedPids.add(pid);
+                    acceptedPageUuids.add(PidAdapter.toUuid(pid));
                 }
-
-                batchService.setProcessedItemCount(batch, batch.getProcessedItemCount() + 1);
+            } catch (ExecutionException e) {
+                for (Future<String> future : futures) {
+                    future.cancel(true);
+                }
+                throw e.getCause() instanceof RuntimeException re ? re : new RuntimeException(e.getCause());
             }
 
-            if (!planObjectIndexing) {
-                krameriusService.planHierarchyIndexing(batch.getPid());
-            } else if (!acceptedPids.isEmpty()) {
-                krameriusService.planObjectIndexing(acceptedPids);
-            }
+            batchService.setProcessedItemCount(batch, processed.get());
+
+            objectHierarchyService.refreshPageCountsForAcceptedPages(acceptedPageUuids);
+
+            // Make the accepted ALTO searchable: rebuild the processing index for the
+            // accepted pages (rebuild is not recursive), wait for that to finish, then
+            // reindex — recursively from the pid the batch was accepted with (its subtree
+            // only, e.g. the accepted periodical item, not the whole periodical), else the
+            // pages. A rebuild failure or timeout throws and fails the batch (below).
+            krameriusService.rebuildAndReindex(acceptedPids, batch.getPid());
 
             batchService.setState(batch, BatchState.DONE);
 
@@ -90,7 +122,25 @@ public class AcceptVersionsProcess extends BatchProcess {
             } catch (Exception e2) {
                 log.error("Failed to set batch as failed: " + e2.getMessage(), e2);
             }
+        } finally {
+            pool.shutdownNow();
         }
+    }
+
+    private String acceptVersion(Batch batch, int versionId, AtomicInteger processed) {
+        AltoVersionUploadContent uploadContent = altoVersionService.getAltoVersionUploadContent(versionId);
+
+        krameriusService.uploadAltoOcr(uploadContent.getPid(), uploadContent.getAltoContent(),
+                uploadContent.getOcrContent());
+
+        altoVersionService.accept(versionId, false);
+
+        int done = processed.incrementAndGet();
+        if (done % PROGRESS_EVERY_N_ITEMS == 0) {
+            batchService.setProcessedItemCount(batch, done);
+        }
+
+        return uploadContent.getPid();
     }
 
     private AltoVersionSearchFilter parseInput(String data) {

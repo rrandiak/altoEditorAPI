@@ -3,6 +3,7 @@ package cz.inovatika.altoEditor.infrastructure.kramerius;
 import java.util.List;
 
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusObjectMetadata;
+import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusProcessState;
 import cz.inovatika.altoEditor.infrastructure.kramerius.model.KrameriusUser;
 
 public interface KrameriusClient {
@@ -30,4 +31,13 @@ public interface KrameriusClient {
     public void planObjectIndexing(List<String> pids);
 
     public void planHierarchyIndexing(String pid);
+
+    /**
+     * Plan a processing-index rebuild for the target (a single pid or a {@code ;}-joined
+     * list of pids, handled by one process); returns the process uuid to poll.
+     */
+    public String planRebuildProcessingIndex(String target);
+
+    /** Current lifecycle state of a planned process, looked up by its uuid. */
+    public KrameriusProcessState getProcessState(String processUuid);
 }

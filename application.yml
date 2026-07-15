@@ -1,5 +1,8 @@
 application:
   maxProcesses: 5
+  batch:
+    # Per-batch worker pool size (the parallel accept/retrieve fan-out uses workerThreads-1).
+    workerThreads: "${ALTO_EDITOR_WORKER_THREADS:8}"
   process-scheduling:
     enabled: true
     cron: "0/5 * * * * ?"
@@ -20,6 +23,7 @@ application:
       url: "https://api.kramerius.mzk.cz/"
       serviceClientId: "${ALTO_EDITOR_SERVICE_CLIENT_ID:replaceMe}"
       serviceSecret: "${ALTO_EDITOR_SERVICE_SECRET:replaceMe}"
+      maxConnections: "${ALTO_EDITOR_MAX_CONNECTIONS:32}"
   engines:
     pero-vut:
       exec: "python"

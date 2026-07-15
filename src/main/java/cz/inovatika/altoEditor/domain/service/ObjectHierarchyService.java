@@ -1,8 +1,11 @@
 package cz.inovatika.altoEditor.domain.service;
 
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.hibernate.search.engine.search.query.SearchResult;
@@ -244,6 +247,53 @@ public class ObjectHierarchyService {
             current.setHasSubhierarchy(digitalObjectRepository.existsNonPageChild(current.getUuid()));
             digitalObjectRepository.save(current);
             current = current.getParent();
+        }
+    }
+
+    /**
+     * Recomputes page-count stats for every distinct ancestor of the given accepted
+     * pages, once each.
+     *
+     * <p>Walks each page's parent chain to the root, collecting a de-duplicated set
+     * of ancestor nodes, then recomputes {@code pagesCount}/{@code pagesWithAlto}/
+     * {@code hasSubhierarchy} exactly once per distinct ancestor. The counts are
+     * absolute (derived from descendants via {@link DigitalObjectRepository#getDescendantPageStats}),
+     * so node visit order is irrelevant and each node needs recomputing only once.
+     *
+     * <p>Intended to run single-threaded after a parallel accept phase: it avoids the
+     * shared-row contention of per-page ancestor walks and is O(distinct ancestors)
+     * instead of O(pages × depth).
+     */
+    @Transactional
+    public void refreshPageCountsForAcceptedPages(Collection<UUID> pageUuids) {
+        entityManager.flush();
+
+        // Collect distinct ancestors. Every walk runs to the root, so once we hit an
+        // already-seen ancestor, all of its ancestors are seen too and we can stop.
+        Set<UUID> ancestors = new LinkedHashSet<>();
+        for (UUID pageUuid : pageUuids) {
+            DigitalObject current = digitalObjectRepository.findById(pageUuid).orElse(null);
+            if (current == null) {
+                continue;
+            }
+            current = current.getParent();
+            while (current != null && ancestors.add(current.getUuid())) {
+                current = current.getParent();
+            }
+        }
+
+        for (UUID ancestorUuid : ancestors) {
+            DigitalObject node = digitalObjectRepository.findById(ancestorUuid).orElse(null);
+            if (node == null) {
+                continue;
+            }
+            PageCountStats stats = digitalObjectRepository.getDescendantPageStats(node.getUuid());
+            int total = stats != null && stats.getTotalPages() != null ? stats.getTotalPages() : 0;
+            int withAlto = stats != null && stats.getPagesWithAlto() != null ? stats.getPagesWithAlto() : 0;
+            node.setPagesCount(total);
+            node.setPagesWithAlto(withAlto);
+            node.setHasSubhierarchy(digitalObjectRepository.existsNonPageChild(node.getUuid()));
+            digitalObjectRepository.save(node);
         }
     }
 

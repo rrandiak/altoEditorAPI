@@ -7,9 +7,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+/**
+ * K7 admin process definition for the indexer ({@code new_indexer_index_object}).
+ *
+ * <p>The current API takes a single {@code pid} (or a {@code ;}-joined list of pids
+ * handled by one process) plus a {@code type} and {@code ignoreInconsistentObjects};
+ * there is no separate {@code pidlist} parameter.
+ */
 @Getter
 public class K7ReindexProcess {
 
@@ -17,11 +23,11 @@ public class K7ReindexProcess {
     private final Params params;
 
     public K7ReindexProcess(ReindexType reindexType, String pid) {
-        this.params = new Params(reindexType, pid, null);
+        this.params = new Params(reindexType, pid);
     }
 
     public K7ReindexProcess(ReindexType reindexType, List<String> pids) {
-        this.params = new Params(reindexType, null, pids);
+        this.params = new Params(reindexType, String.join(";", pids));
     }
 
     /**
@@ -40,7 +46,6 @@ public class K7ReindexProcess {
         TREE_AND_FOSTER_TREES
     }
 
-    @AllArgsConstructor
     @Getter
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Params {
@@ -48,9 +53,14 @@ public class K7ReindexProcess {
         private final ReindexType reindexType;
 
         @JsonProperty("pid")
-        private String pid;
+        private final String pid;
 
-        @JsonProperty("pidlist")
-        private List<String> pidList;
+        @JsonProperty("ignoreInconsistentObjects")
+        private final boolean ignoreInconsistentObjects = true;
+
+        public Params(ReindexType reindexType, String pid) {
+            this.reindexType = reindexType;
+            this.pid = pid;
+        }
     }
 }

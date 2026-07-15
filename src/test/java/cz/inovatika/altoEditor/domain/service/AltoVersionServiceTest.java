@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -391,6 +392,36 @@ class AltoVersionServiceTest {
             verify(repository).archiveActiveAndStaleVersions(TEST_UUID, 2);
             verify(repository).save(toAccept);
             assertThat(toAccept.getState()).isEqualTo(AltoVersionState.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("single-accept path refreshes ancestor page counts")
+        void refreshesAncestors_whenRefreshFlagTrue() {
+            DigitalObject dobj = DigitalObject.builder().uuid(TEST_UUID).pid(PID).build();
+            AltoVersion toAccept = AltoVersion.builder().id(1).digitalObject(dobj).version(2).state(AltoVersionState.PENDING).build();
+
+            when(repository.findById(1)).thenReturn(Optional.of(toAccept));
+            when(repository.save(any(AltoVersion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.accept(1);
+
+            verify(objectHierarchyService).refreshPageCountsForAncestors(TEST_UUID);
+        }
+
+        @Test
+        @DisplayName("batch path (refreshHierarchyStats=false) skips the per-page ancestor refresh")
+        void skipsAncestorRefresh_whenRefreshFlagFalse() {
+            DigitalObject dobj = DigitalObject.builder().uuid(TEST_UUID).pid(PID).build();
+            AltoVersion toAccept = AltoVersion.builder().id(1).digitalObject(dobj).version(2).state(AltoVersionState.PENDING).build();
+
+            when(repository.findById(1)).thenReturn(Optional.of(toAccept));
+            when(repository.save(any(AltoVersion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.accept(1, false);
+
+            verify(repository).archiveActiveAndStaleVersions(TEST_UUID, 2);
+            assertThat(toAccept.getState()).isEqualTo(AltoVersionState.ACTIVE);
+            verify(objectHierarchyService, never()).refreshPageCountsForAncestors(any());
         }
     }
 

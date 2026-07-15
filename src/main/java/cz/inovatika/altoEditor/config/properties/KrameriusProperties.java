@@ -47,8 +47,19 @@ public class KrameriusProperties {
         @NotNull
         private Integer pendingAcquireMaxCount = 64;
 
+        /** Total attempts for a service-token call before giving up (1 = no retry). */
         @NotNull
-        private Integer indexBatchSize = 1000;
+        private Integer retryMaxAttempts = 3;
+        /** Base backoff between retries; grows linearly with the attempt number. */
+        @NotNull
+        private Integer retryBackoffMillis = 500;
+
+        /** How often to poll a planned Kramerius process (e.g. rebuild) for completion. */
+        @NotNull
+        private Integer processPollIntervalMillis = 3000;
+        /** Max time to wait for a planned Kramerius process before failing the batch. */
+        @NotNull
+        private Integer processPollTimeoutMillis = 1800000;
 
         private String clientUrl;
         private String adminUrl;

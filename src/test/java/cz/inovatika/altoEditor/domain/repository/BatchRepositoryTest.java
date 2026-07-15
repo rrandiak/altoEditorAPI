@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 
 import cz.inovatika.altoEditor.domain.enums.BatchPriority;
@@ -44,6 +45,24 @@ class BatchRepositoryTest {
                 .state(state)
                 .createdBy(testUser)
                 .build();
+    }
+
+    private Batch createStage(BatchType type, BatchState state, Integer parentBatchId, Integer stageOrder) {
+        return Batch.builder()
+                .type(type)
+                .priority(BatchPriority.MEDIUM)
+                .pid("uuid:pipeline-page")
+                .state(state)
+                .parentBatchId(parentBatchId)
+                .stageOrder(stageOrder)
+                .createdBy(testUser)
+                .build();
+    }
+
+    private Batch claim(BatchType type) {
+        return batchRepository
+                .findClaimableByStateAndType(BatchState.PLANNED, type, PageRequest.of(0, 1))
+                .stream().findFirst().orElse(null);
     }
 
     @BeforeEach
@@ -124,6 +143,89 @@ class BatchRepositoryTest {
             List<Batch> failed = batchRepository.findByStateOrderByIdAsc(BatchState.FAILED);
 
             assertThat(failed).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("findClaimableByStateAndType (dependency-aware claim)")
+    class FindClaimable {
+
+        @Test
+        @DisplayName("standalone PLANNED batch (no parent) is always claimable")
+        void standaloneBatchIsClaimable() {
+            batchRepository.save(createBatch("uuid:1", BatchState.PLANNED, "dk"));
+            entityManager.flush();
+
+            assertThat(claim(BatchType.GENERATE_SINGLE)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("pipeline child stages become claimable only after the previous stage is DONE")
+        void pipelineStagesClaimableInOrder() {
+            Batch parent = batchRepository.save(Batch.builder()
+                    .type(BatchType.PIPELINE).priority(BatchPriority.MEDIUM)
+                    .pid("uuid:root").state(BatchState.PLANNED).createdBy(testUser).build());
+            Batch retrieve = batchRepository.save(createStage(BatchType.RETRIEVE_HIERARCHY, BatchState.PLANNED, parent.getId(), 0));
+            Batch generate = batchRepository.save(createStage(BatchType.GENERATE_FOR_HIERARCHY, BatchState.PLANNED, parent.getId(), 1));
+            Batch accept = batchRepository.save(createStage(BatchType.ACCEPT_VERSIONS, BatchState.PLANNED, parent.getId(), 2));
+            entityManager.flush();
+
+            // Only stage 0 is claimable initially
+            assertThat(claim(BatchType.RETRIEVE_HIERARCHY)).extracting(Batch::getId).isEqualTo(retrieve.getId());
+            assertThat(claim(BatchType.GENERATE_FOR_HIERARCHY)).isNull();
+            assertThat(claim(BatchType.ACCEPT_VERSIONS)).isNull();
+
+            // Finish stage 0 -> stage 1 claimable, stage 2 still blocked
+            retrieve.setState(BatchState.DONE);
+            batchRepository.save(retrieve);
+            entityManager.flush();
+            assertThat(claim(BatchType.GENERATE_FOR_HIERARCHY)).extracting(Batch::getId).isEqualTo(generate.getId());
+            assertThat(claim(BatchType.ACCEPT_VERSIONS)).isNull();
+
+            // Finish stage 1 -> stage 2 claimable
+            generate.setState(BatchState.DONE);
+            batchRepository.save(generate);
+            entityManager.flush();
+            assertThat(claim(BatchType.ACCEPT_VERSIONS)).extracting(Batch::getId).isEqualTo(accept.getId());
+        }
+    }
+
+    @Nested
+    @DisplayName("pipeline child queries")
+    class PipelineChildQueries {
+
+        @Test
+        @DisplayName("findByParentBatchIdOrderByStageOrderAsc returns children in stage order")
+        void findsChildrenInStageOrder() {
+            Batch parent = batchRepository.save(Batch.builder()
+                    .type(BatchType.PIPELINE).priority(BatchPriority.MEDIUM)
+                    .pid("uuid:root").state(BatchState.PLANNED).createdBy(testUser).build());
+            batchRepository.save(createStage(BatchType.ACCEPT_VERSIONS, BatchState.PLANNED, parent.getId(), 2));
+            batchRepository.save(createStage(BatchType.RETRIEVE_HIERARCHY, BatchState.PLANNED, parent.getId(), 0));
+            batchRepository.save(createStage(BatchType.GENERATE_FOR_HIERARCHY, BatchState.PLANNED, parent.getId(), 1));
+            entityManager.flush();
+
+            List<Batch> children = batchRepository.findByParentBatchIdOrderByStageOrderAsc(parent.getId());
+
+            assertThat(children).extracting(Batch::getStageOrder).containsExactly(0, 1, 2);
+            assertThat(children).extracting(Batch::getType).containsExactly(
+                    BatchType.RETRIEVE_HIERARCHY, BatchType.GENERATE_FOR_HIERARCHY, BatchType.ACCEPT_VERSIONS);
+        }
+
+        @Test
+        @DisplayName("findByTypeAndStateIn returns only pipelines in the given states")
+        void findsPipelinesByState() {
+            batchRepository.save(Batch.builder().type(BatchType.PIPELINE).priority(BatchPriority.MEDIUM)
+                    .pid("uuid:a").state(BatchState.RUNNING).createdBy(testUser).build());
+            batchRepository.save(Batch.builder().type(BatchType.PIPELINE).priority(BatchPriority.MEDIUM)
+                    .pid("uuid:b").state(BatchState.DONE).createdBy(testUser).build());
+            entityManager.flush();
+
+            List<Batch> active = batchRepository.findByTypeAndStateIn(
+                    BatchType.PIPELINE, List.of(BatchState.PLANNED, BatchState.RUNNING));
+
+            assertThat(active).hasSize(1);
+            assertThat(active.get(0).getState()).isEqualTo(BatchState.RUNNING);
         }
     }
 

@@ -34,4 +34,7 @@ public class BatchSearchRequest {
     private BatchPriority priority;
     private BatchType type;
     private String instance;
+
+    /** Filter to the child stages of a given pipeline batch. */
+    private Integer parentBatchId;
 }

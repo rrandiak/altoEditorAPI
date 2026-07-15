@@ -30,6 +30,10 @@ public class CompositeBatchProcessFactory implements BatchProcessFactory {
             case RETRIEVE_HIERARCHY -> retrieveHierarchyProcessFactory.create(batch);
             case ACCEPT_VERSIONS -> acceptVersionsProcessFactory.create(batch);
             case REINDEX -> reindexProcessFactory.create(batch);
+            // PIPELINE parents are never dispatched (see ProcessDispatcher); only their
+            // child stage batches run. Reaching here means a scheduling bug.
+            case PIPELINE -> throw new IllegalStateException(
+                    "PIPELINE batches are not dispatchable: " + batch.getId());
         };
     }
 }

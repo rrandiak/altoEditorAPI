@@ -38,8 +38,14 @@ public class BatchFacade {
         Page<Batch> page = service.search(request.getPid(), request.getState(), request.getSubstate(),
                 request.getCreatedAfter(), request.getCreatedBefore(), request.getUpdatedAfter(),
                 request.getUpdatedBefore(),
-                request.getPriority(), request.getType(), request.getInstance(), createdById, pageable);
+                request.getPriority(), request.getType(), request.getInstance(), createdById,
+                request.getParentBatchId(), pageable);
 
         return page.map(mapper::toDto);
+    }
+
+    /** Fetch a single batch by id. */
+    public BatchDto getBatch(Integer id) {
+        return mapper.toDto(service.getById(id));
     }
 }

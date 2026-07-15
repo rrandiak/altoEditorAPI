@@ -40,7 +40,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "batches", indexes = {
         @Index(columnList = "state"),
-        @Index(columnList = "created_by")
+        @Index(columnList = "created_by"),
+        @Index(columnList = "parent_batch_id")
 })
 @EntityListeners(AuditingEntityListener.class)
 @Builder
@@ -153,6 +154,21 @@ public class Batch {
      */
     @Column(name = "data", columnDefinition = "TEXT")
     private String data;
+
+    /**
+     * For a pipeline child stage: the id of its parent {@link BatchType#PIPELINE} batch.
+     * Null for the parent and for all standalone (non-pipeline) batches.
+     */
+    @Column(name = "parent_batch_id")
+    private Integer parentBatchId;
+
+    /**
+     * For a pipeline child stage: 0-based position within the pipeline (compacted over the
+     * selected stages). The scheduler will not claim a child until every sibling with a
+     * smaller stageOrder is DONE. Null for the parent and for standalone batches.
+     */
+    @Column(name = "stage_order")
+    private Integer stageOrder;
 
     public UUID getUuid() {
         if (this.pid == null) {

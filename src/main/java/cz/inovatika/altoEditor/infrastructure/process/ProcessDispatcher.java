@@ -42,6 +42,11 @@ public class ProcessDispatcher {
         Thread.UncaughtExceptionHandler uncaughtHandler =
                 (thread, ex) -> LOGGER.error("Uncaught in {}", thread.getName(), ex);
         for (BatchType type : BatchType.values()) {
+            // PIPELINE is a parent grouping batch, never dispatched to a worker; its state
+            // is derived by PipelineCoordinator. No executor for it.
+            if (type == BatchType.PIPELINE) {
+                continue;
+            }
             int max = Math.max(1, config.getMaxProcessesForType(type));
             BatchType typeForLambda = type;
             ThreadPoolExecutor executor = new ThreadPoolExecutor(

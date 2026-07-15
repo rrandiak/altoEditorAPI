@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -43,13 +44,22 @@ public class BatchService {
         return repository.findByStateOrderByIdAsc(BatchState.RUNNING);
     }
 
+    /** Child stage batches of a pipeline, ordered by their stage position. */
+    @Transactional(readOnly = true)
+    public List<Batch> findChildStages(Integer parentBatchId) {
+        return repository.findByParentBatchIdOrderByStageOrderAsc(parentBatchId);
+    }
+
     /**
-     * Claim the oldest PLANNED batch of the given type: set it to RUNNING and return it.
-     * Uses a lock so concurrent planners do not claim the same batch. Returns empty if none planned.
+     * Claim the oldest claimable PLANNED batch of the given type: set it to RUNNING and return it.
+     * Uses a lock so concurrent planners do not claim the same batch. Pipeline child stages are
+     * only claimed once their earlier sibling stages are DONE. Returns empty if none claimable.
      */
     @Transactional
     public Optional<Batch> claimOldestPlannedBatchByType(BatchType type) {
-        Optional<Batch> opt = repository.findFirstByStateAndTypeOrderByIdAsc(BatchState.PLANNED, type);
+        Optional<Batch> opt = repository
+                .findClaimableByStateAndType(BatchState.PLANNED, type, PageRequest.of(0, 1))
+                .stream().findFirst();
         opt.ifPresent(b -> setState(b, BatchState.RUNNING));
         return opt;
     }
@@ -103,6 +113,7 @@ public class BatchService {
             BatchType type,
             String instance,
             Long createdBy,
+            Integer parentBatchId,
             Pageable pageable) {
         Specification<Batch> spec = Specification.allOf(
                 BatchSpecifications.hasPid(pid),
@@ -115,7 +126,8 @@ public class BatchService {
                 BatchSpecifications.hasPriority(priority),
                 BatchSpecifications.hasType(type),
                 BatchSpecifications.hasInstance(instance),
-                BatchSpecifications.hasCreatedBy(createdBy)
+                BatchSpecifications.hasCreatedBy(createdBy),
+                BatchSpecifications.hasParentBatchId(parentBatchId)
         );
 
         return repository.findAll(spec, pageable);

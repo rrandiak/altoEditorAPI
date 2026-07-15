@@ -39,4 +39,10 @@ public class BatchDto {
     private Integer processedItemCount;
 
     private String log;
+
+    /** For a pipeline child stage: id of the parent PIPELINE batch (null otherwise). */
+    private Integer parentBatchId;
+
+    /** For a pipeline child stage: 0-based position within the pipeline (null otherwise). */
+    private Integer stageOrder;
 }

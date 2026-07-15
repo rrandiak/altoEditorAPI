@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +44,12 @@ public class BatchController {
         Page<BatchDto> page = facade.searchBatches(request, pageable);
 
         return ResponseEntity.ok(page);
+    }
+
+    /** Fetch a single batch by id (e.g. a pipeline parent or one of its stages). */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('CURATOR')")
+    public ResponseEntity<BatchDto> getBatch(@PathVariable Integer id) {
+        return ResponseEntity.ok(facade.getBatch(id));
     }
 }

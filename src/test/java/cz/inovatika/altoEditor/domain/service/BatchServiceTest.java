@@ -267,6 +267,7 @@ class BatchServiceTest {
                     LocalDateTime.now().minusDays(1), LocalDateTime.now(),
                     BatchPriority.HIGH, BatchType.GENERATE_SINGLE, "dk",
                     null,
+                    null,
                     pageable);
 
             assertThat(result).isNotNull();
@@ -283,7 +284,7 @@ class BatchServiceTest {
             when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(expectedPage);
 
             Page<Batch> result = service.search(
-                    null, null, null, null, null, null, null, null, null, null, null, pageable);
+                    null, null, null, null, null, null, null, null, null, null, null, null, pageable);
 
             assertThat(result).isNotNull();
             verify(repository).findAll(isA(Specification.class), eq(pageable));
@@ -297,7 +298,7 @@ class BatchServiceTest {
             when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(emptyPage);
 
             Page<Batch> result = service.search(
-                    "uuid:nonexistent", null, null, null, null, null, null, null, null, null, null, pageable);
+                    "uuid:nonexistent", null, null, null, null, null, null, null, null, null, null, null, pageable);
 
             assertThat(result.getContent()).isEmpty();
             assertThat(result.getTotalElements()).isEqualTo(0);
@@ -311,7 +312,7 @@ class BatchServiceTest {
             when(repository.findAll(isA(Specification.class), eq(pageable))).thenReturn(expectedPage);
 
             Page<Batch> result = service.search(
-                    null, null, null, null, null, null, null, null, null, null, null, pageable);
+                    null, null, null, null, null, null, null, null, null, null, null, null, pageable);
 
             assertThat(result.getSize()).isEqualTo(5);
             assertThat(result.getNumber()).isEqualTo(1);

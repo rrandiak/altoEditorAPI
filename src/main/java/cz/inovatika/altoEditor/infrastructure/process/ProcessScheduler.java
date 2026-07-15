@@ -21,10 +21,13 @@ public class ProcessScheduler {
 
     private final ProcessDispatcher processDispatcher;
 
+    private final PipelineCoordinator pipelineCoordinator;
+
     /** Run every 5 seconds. Override with {@code application.process-scheduling.cron}. */
     @Scheduled(cron = "${application.process-scheduling.cron:0/5 * * * * ?}")
     public void planBatches() {
         LOGGER.trace("Running batch plan");
         processDispatcher.plan();
+        pipelineCoordinator.reconcile();
     }
 }

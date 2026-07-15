@@ -56,4 +56,8 @@ public class BatchSpecifications {
     public static Specification<Batch> hasCreatedBy(Long userId) {
         return (root, query, cb) -> userId == null ? null : cb.equal(root.get("createdBy").get("id"), userId);
     }
+
+    public static Specification<Batch> hasParentBatchId(Integer parentBatchId) {
+        return (root, query, cb) -> parentBatchId == null ? null : cb.equal(root.get("parentBatchId"), parentBatchId);
+    }
 }

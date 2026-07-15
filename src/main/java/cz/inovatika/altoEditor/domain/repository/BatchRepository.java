@@ -1,5 +1,6 @@
 package cz.inovatika.altoEditor.domain.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,10 +39,32 @@ public interface BatchRepository extends JpaRepository<Batch, Integer>,
     List<Batch> findByStateOrderByIdAsc(BatchState state);
 
     /**
-     * Find oldest batch by state and type (for planning). Locked to avoid double-claim.
+     * Find the oldest claimable batch of the given state and type (for planning), locked to
+     * avoid double-claim. A pipeline child stage is claimable only once every sibling with a
+     * smaller stageOrder is DONE; standalone batches (no parent) are always claimable.
+     * Pass a page request of size 1 to get just the oldest.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<Batch> findFirstByStateAndTypeOrderByIdAsc(BatchState state, BatchType type);
+    @Query("""
+                SELECT b FROM Batch b
+                WHERE b.state = :state AND b.type = :type
+                  AND (b.parentBatchId IS NULL
+                       OR NOT EXISTS (
+                           SELECT s FROM Batch s
+                           WHERE s.parentBatchId = b.parentBatchId
+                             AND s.stageOrder < b.stageOrder
+                             AND s.state <> BatchState.DONE
+                       ))
+                ORDER BY b.id ASC
+            """)
+    List<Batch> findClaimableByStateAndType(@Param("state") BatchState state,
+            @Param("type") BatchType type, Pageable pageable);
+
+    /** Child stage batches of a pipeline, ordered by their stage position. */
+    List<Batch> findByParentBatchIdOrderByStageOrderAsc(Integer parentBatchId);
+
+    /** Batches of a type in any of the given states (e.g. non-terminal pipelines to reconcile). */
+    List<Batch> findByTypeAndStateIn(BatchType type, Collection<BatchState> states);
 
     /**
      * Set all RUNNING batches to FAILED with a log message

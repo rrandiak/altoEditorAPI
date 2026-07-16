@@ -108,10 +108,12 @@ public class PipelineService {
                 builder.engine(engine).data(writeJson(input, "hierarchy generate input"));
             }
             case ACCEPT -> {
+                // NB: no instance filter — `instance` is not a mapped field on the AltoVersion
+                // search index (HSEARCH000610), and accept uploads to all configured instances
+                // anyway. Match the manual-accept filter: hierarchy + engine user + PENDING.
                 Long engineUserId = userService.getUserByUsername(engine).getId();
                 AltoVersionSearchFilter filter = AltoVersionSearchFilter.builder()
                         .hierarchyPid(pid)
-                        .instance(instance)
                         .users(List.of(engineUserId))
                         .states(List.of(AltoVersionState.PENDING))
                         .build();

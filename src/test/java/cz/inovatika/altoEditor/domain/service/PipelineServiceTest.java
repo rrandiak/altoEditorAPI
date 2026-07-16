@@ -98,10 +98,11 @@ class PipelineServiceTest {
         // generate carries the scope
         assertThat(children.get(1).getData()).contains("NO_PENDING_NOR_ACTIVE");
 
-        // accept filter is derived: hierarchyPid=pid, PENDING, engine user
+        // accept filter is derived: hierarchyPid=pid, PENDING, engine user (no instance —
+        // instance is not a mapped search field, see PipelineService)
         AltoVersionSearchFilter filter = objectMapper.readValue(children.get(2).getData(), AltoVersionSearchFilter.class);
         assertThat(filter.getHierarchyPid()).isEqualTo(PID);
-        assertThat(filter.getInstance()).isEqualTo(INSTANCE);
+        assertThat(filter.getInstance()).isNull();
         assertThat(filter.getStates()).containsExactly(AltoVersionState.PENDING);
         assertThat(filter.getUsers()).containsExactly(ENGINE_USER_ID);
     }

@@ -40,6 +40,10 @@ public class TuzkaOcrEngine implements OcrEngine {
     @Override
     public OcrResult generate(String pid, byte[] imageBytes) {
         wsClient.start();
+        // Use the pid's UUID as the taas external id so jobs correlate to pages in taas.
+        // (taas must allow re-submitting the same external id for re-OCR — a duplicate
+        // rejection there is a taas-side issue, not something to work around by losing the
+        // correlation.)
         String externalId = externalIdFor(pid);
         CompletableFuture<TuzkaEvent> future = wsClient.register(externalId);
         try {

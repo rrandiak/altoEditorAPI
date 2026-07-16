@@ -1,10 +1,17 @@
 package cz.inovatika.altoEditor.infrastructure.process.altoocr.engine.tuzka;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import com.github.luben.zstd.ZstdInputStream;
 
 /**
  * HTTP client for one tuzka-as-a-service (taas) engine, using the user-key Jobs API
@@ -40,13 +47,21 @@ public class TuzkaClient {
         body.part("uuid", externalId);
         body.part("fmt", fmt);
 
-        TuzkaJobResponse response = webClient.post()
-                .uri("/api/v1/jobs")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(body.build()))
-                .retrieve()
-                .bodyToMono(TuzkaJobResponse.class)
-                .block();
+        TuzkaJobResponse response;
+        try {
+            response = webClient.post()
+                    .uri("/api/v1/jobs")
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(BodyInserters.fromMultipartData(body.build()))
+                    .retrieve()
+                    .bodyToMono(TuzkaJobResponse.class)
+                    .block();
+        } catch (WebClientResponseException e) {
+            // Surface the taas response body — a bare 5xx/4xx from POST /jobs hides the reason
+            // (e.g. a duplicate external id, or a rejected image).
+            throw new RuntimeException("taas POST /jobs failed for " + externalId + ": "
+                    + e.getStatusCode() + " " + e.getResponseBodyAsString(), e);
+        }
 
         if (response == null || response.getJobId() == null) {
             throw new RuntimeException("taas did not return a job id for submission " + externalId);
@@ -54,17 +69,47 @@ public class TuzkaClient {
         return response.getJobId();
     }
 
-    /** Download the ALTO artifact for a completed job (server-side stream, decompressed). */
+    /**
+     * Download the ALTO artifact for a completed job. taas stores results zstd-compressed and
+     * the download endpoint streams the stored object as-is, so decompress when the bytes carry
+     * the zstd magic number (and pass through if a deployment ever returns raw XML).
+     */
     public byte[] downloadAlto(String jobId) {
-        byte[] alto = webClient.get()
+        byte[] body = webClient.get()
                 .uri("/api/v1/jobs/{jobId}/result/{fmt}/download", jobId, fmt)
                 .retrieve()
                 .bodyToMono(byte[].class)
                 .block();
 
-        if (alto == null || alto.length == 0) {
+        if (body == null || body.length == 0) {
             throw new RuntimeException("taas returned empty ALTO for job " + jobId);
         }
-        return alto;
+        return decompressIfZstd(body);
+    }
+
+    static boolean isZstd(byte[] content) {
+        return content.length >= 4
+                && (content[0] & 0xFF) == 0x28
+                && (content[1] & 0xFF) == 0xB5
+                && (content[2] & 0xFF) == 0x2F
+                && (content[3] & 0xFF) == 0xFD;
+    }
+
+    static byte[] decompressIfZstd(byte[] content) {
+        if (!isZstd(content)) {
+            return content;
+        }
+        try (ByteArrayInputStream input = new ByteArrayInputStream(content);
+                ZstdInputStream zstd = new ZstdInputStream(input);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+            byte[] chunk = new byte[8192];
+            int n;
+            while ((n = zstd.read(chunk, 0, chunk.length)) != -1) {
+                buffer.write(chunk, 0, n);
+            }
+            return buffer.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to zstd-decompress taas result", e);
+        }
     }
 }

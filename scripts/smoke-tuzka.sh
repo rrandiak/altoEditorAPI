@@ -93,7 +93,9 @@ prompt_secret() { local v; read -rsp "$1" v; echo >&2; echo "$v"; }
 
 info "Enter environment details (leave app/taas fields blank if using --no-app)"
 
-DEV_KRAMERIUS_URL="${DEV_KRAMERIUS_URL:-}"
+# Each value is taken from its env var if set (standard ALTO_EDITOR_* where one exists),
+# and only prompted for when still empty.
+DEV_KRAMERIUS_URL="${DEV_KRAMERIUS_URL:-${ALTO_EDITOR_KRAMERIUS_URL:-}}"
 TEST_PID="${TEST_PID:-}"
 CURATOR_TOKEN="${CURATOR_TOKEN:-}"
 CLIENT_ID="${ALTO_EDITOR_SERVICE_CLIENT_ID:-}"

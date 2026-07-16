@@ -89,7 +89,7 @@ prompt_secret() { local v; read -rsp "$1" v; echo >&2; echo "$v"; }
 
 info "Enter dev environment details (leave app fields blank if using --no-app)"
 
-DEV_KRAMERIUS_URL="${DEV_KRAMERIUS_URL:-}"
+DEV_KRAMERIUS_URL="${DEV_KRAMERIUS_URL:-${ALTO_EDITOR_KRAMERIUS_URL:-}}"
 TEST_PID="${TEST_PID:-}"
 CURATOR_TOKEN="${CURATOR_TOKEN:-}"
 CLIENT_ID="${ALTO_EDITOR_SERVICE_CLIENT_ID:-}"

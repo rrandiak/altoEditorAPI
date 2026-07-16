@@ -47,6 +47,13 @@ application:
         - "7"
         - "--job-timeout"
         - "${ALTO_EDITOR_JOB_TIMEOUT:3600}"
+    tuzka:
+      type: "TUZKA"
+      baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
+      apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
+      fmt: "alto"
+      parallelism: 40
+      timeout: 300000
 
 spring:
   datasource:

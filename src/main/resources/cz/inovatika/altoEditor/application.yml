@@ -34,6 +34,12 @@ application:
         - "${ALTO_EDITOR_MINIO_SECRET_KEY:replaceMe}"
         - "--engine"
         - "7"
+    tuzka:
+      type: "TUZKA"
+      baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
+      apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
+      fmt: "alto"
+      parallelism: 20
 
 spring:
   datasource:

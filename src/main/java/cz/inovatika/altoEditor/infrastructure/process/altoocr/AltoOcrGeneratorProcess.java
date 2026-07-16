@@ -1,8 +1,5 @@
 package cz.inovatika.altoEditor.infrastructure.process.altoocr;
 
-import java.io.File;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -15,7 +12,6 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import cz.inovatika.altoEditor.config.properties.EnginesProperties;
 import cz.inovatika.altoEditor.domain.enums.BatchState;
 import cz.inovatika.altoEditor.domain.enums.BatchType;
 import cz.inovatika.altoEditor.domain.model.Batch;
@@ -24,15 +20,13 @@ import cz.inovatika.altoEditor.domain.model.dto.HierarchyGenerateInput;
 import cz.inovatika.altoEditor.domain.service.AltoVersionService;
 import cz.inovatika.altoEditor.domain.service.BatchService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
+import cz.inovatika.altoEditor.infrastructure.process.altoocr.engine.OcrEngine;
+import cz.inovatika.altoEditor.infrastructure.process.altoocr.engine.OcrResult;
 import cz.inovatika.altoEditor.infrastructure.process.templates.BatchProcess;
-import cz.inovatika.altoEditor.infrastructure.process.templates.ExternalProcess;
-import cz.inovatika.altoEditor.infrastructure.storage.WorkDirectoryService;
 
 public class AltoOcrGeneratorProcess extends BatchProcess {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AltoOcrGeneratorProcess.class);
-
-    private final WorkDirectoryService workDirectoryService;
 
     private final BatchService batchService;
     private final AltoVersionService altoVersionService;
@@ -40,25 +34,22 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
     private final Long engineUserId;
     private final String engineName;
-    private final EnginesProperties.EngineConfig engineConfig;
+    private final OcrEngine ocrEngine;
     private final EngineExecutorServiceRegistry executorRegistry;
     private final ObjectMapper objectMapper;
 
     public AltoOcrGeneratorProcess(
-            WorkDirectoryService workDirectoryService,
             BatchService batchService,
             AltoVersionService altoVersionService,
             KrameriusService krameriusService,
             Long engineUserId,
             String engineName,
-            EnginesProperties.EngineConfig engineConfig,
+            OcrEngine ocrEngine,
             EngineExecutorServiceRegistry executorRegistry,
             ObjectMapper objectMapper,
             Batch batch) {
 
         super(batch.getId(), batch.getPriority(), batch.getCreatedAt(), batch.getType());
-
-        this.workDirectoryService = workDirectoryService;
 
         this.batchService = batchService;
         this.altoVersionService = altoVersionService;
@@ -66,54 +57,20 @@ public class AltoOcrGeneratorProcess extends BatchProcess {
 
         this.engineUserId = engineUserId;
         this.engineName = engineName;
-        this.engineConfig = engineConfig;
+        this.ocrEngine = ocrEngine;
         this.executorRegistry = executorRegistry;
         this.objectMapper = objectMapper;
     }
 
-    private ExternalProcess createSingleExternalProcess(File workDir, String pid) {
-        return new GenerateSingleExternalProcess(engineConfig,
-                new File(workDir, pid + ".jpg"),
-                new File(workDir, pid + ".xml"),
-                new File(workDir, pid + ".txt"));
-    }
-
-    private void runExternalProcess(Batch batch, ExternalProcess externalProcess) {
-        externalProcess.run();
-        if (!externalProcess.isOk()) {
-            throw new RuntimeException("Generating ALTO and OCR for PID " + batch.getPid() + " failed:\n"
-                    + externalProcess.getFullOutput());
-        }
-    }
-
     private void processPid(Batch batch, String instance, String pid, AtomicInteger processedCount) {
-        File workDir = workDirectoryService.createWorkDir("batch-" + batch.getId() + "-");
-        try {
-            try {
-                workDirectoryService.saveBytesToFile(
-                        workDir,
-                        pid + ".jpg",
-                        krameriusService.getImageBytes(pid, instance));
-            } catch (java.io.IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        byte[] imageBytes = krameriusService.getImageBytes(pid, instance);
 
-            runExternalProcess(batch, createSingleExternalProcess(workDir, pid));
+        OcrResult result = ocrEngine.generate(pid, imageBytes);
 
-            try {
-                altoVersionService.updateOrCreateEngineVersion(
-                        pid,
-                        this.engineUserId,
-                        Files.readAllBytes(new File(workDir, pid + ".xml").toPath()));
-            } catch (java.io.IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        altoVersionService.updateOrCreateEngineVersion(pid, this.engineUserId, result.alto());
 
-            int newTotal = processedCount.incrementAndGet();
-            batchService.setProcessedItemCount(batch, newTotal);
-        } finally {
-            workDirectoryService.cleanup(workDir);
-        }
+        int newTotal = processedCount.incrementAndGet();
+        batchService.setProcessedItemCount(batch, newTotal);
     }
 
     @Override

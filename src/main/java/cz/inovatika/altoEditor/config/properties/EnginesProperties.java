@@ -9,7 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
@@ -24,9 +23,12 @@ public class EnginesProperties {
     @Data
     @Validated
     public static class EngineConfig {
-        @NotBlank
+        /** Which implementation backs this engine. Defaults to the legacy subprocess. */
+        @NotNull
+        private EngineType type = EngineType.SUBPROCESS;
+
+        // --- SUBPROCESS engine settings (exec/entry required only for SUBPROCESS) ---
         private String exec;
-        @NotBlank
         private String entry;
 
         private String inImageArg = "--image";
@@ -35,6 +37,16 @@ public class EnginesProperties {
 
         private String apiKey = null;
         private String apiKeyArg = "--key";
+
+        // --- TUZKA (native taas) engine settings (baseUrl required only for TUZKA) ---
+        /** Base URL of the tuzka-as-a-service API, e.g. https://taas.mzk.cz */
+        private String baseUrl;
+        /** Result format requested from taas; we persist the ALTO. */
+        private String fmt = "alto";
+        /** Connect timeout for taas HTTP calls. */
+        private Integer connectTimeoutMillis = 10_000;
+        /** Read timeout for a single taas HTTP call. */
+        private Integer readTimeoutMillis = 60_000;
 
         @NotNull
         @Min(value = 1, message = "Parallelism must be at least 1")
@@ -48,6 +60,22 @@ public class EnginesProperties {
                 return apiKeyArg != null && !apiKeyArg.isBlank();
             }
             return true;
+        }
+
+        @AssertTrue(message = "SUBPROCESS engine requires exec and entry")
+        public boolean isValidSubprocessConfiguration() {
+            if (type != EngineType.SUBPROCESS) {
+                return true;
+            }
+            return exec != null && !exec.isBlank() && entry != null && !entry.isBlank();
+        }
+
+        @AssertTrue(message = "TUZKA engine requires baseUrl")
+        public boolean isValidTuzkaConfiguration() {
+            if (type != EngineType.TUZKA) {
+                return true;
+            }
+            return baseUrl != null && !baseUrl.isBlank();
         }
 
         @NotNull

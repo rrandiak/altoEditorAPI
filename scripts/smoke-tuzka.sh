@@ -144,8 +144,14 @@ trap cleanup EXIT
 wait_app_ready() {
   info "Waiting for $APP_URL/api/system/info"
   for i in $(seq 1 60); do
+    # If we launched the app, make sure OUR process is still alive — don't accept a
+    # health response from some other instance while ours has already died.
+    if [ -n "$APP_PID" ] && ! kill -0 "$APP_PID" 2>/dev/null; then
+      tail -40 /tmp/smoke-tuzka-app.log 2>/dev/null; tail -40 logs/allLogs.log 2>/dev/null
+      die "app process $APP_PID exited during startup (see /tmp/smoke-tuzka-app.log and ./logs/allLogs.log)"
+    fi
     if curl -fsS "$APP_URL/api/system/info" >/dev/null 2>&1; then ok "app is up"; return 0; fi
-    [ "$i" -eq 60 ] && die "app did not become ready (see /tmp/smoke-tuzka-app.log)"
+    [ "$i" -eq 60 ] && die "app did not become ready (see /tmp/smoke-tuzka-app.log and ./logs/allLogs.log)"
     sleep 2
   done
 }
@@ -172,6 +178,13 @@ start_app() {
 }
 
 if [ "$START_APP" -eq 1 ]; then
+  # Refuse to run if something is already serving on APP_URL — otherwise the health
+  # check and the whole test would hit that stale instance (a classic source of a
+  # confusing 405 on POST /api/users/me from an older build), not the app we build here.
+  if curl -fsS "$APP_URL/api/system/info" >/dev/null 2>&1; then
+    die "something is already serving $APP_URL — stop it first, or use --no-app to drive it deliberately"
+  fi
+
   export JAVA_HOME
   info "Building jar (mvn package -DskipTests)"
   mvn -q package -DskipTests >/tmp/smoke-tuzka-build.log 2>&1 || {

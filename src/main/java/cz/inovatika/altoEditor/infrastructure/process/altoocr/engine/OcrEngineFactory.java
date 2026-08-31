@@ -69,7 +69,7 @@ public class OcrEngineFactory implements DisposableBean {
             builder.defaultHeader("X-API-Key", config.getApiKey());
         }
 
-        return new TuzkaClient(builder.build(), config.getFmt());
+        return new TuzkaClient(builder.build(), config.getFmt(), config.getDomain());
     }
 
     private TuzkaWsClient buildTuzkaWsClient(EngineConfig config) {

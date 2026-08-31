@@ -52,8 +52,36 @@ application:
       baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
       apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
       fmt: "alto"
+      # taas model domain: kramarky | handwritten | kurrent; empty = default printed models.
+      domain: "${ALTO_EDITOR_TUZKA_DOMAIN:}"
       parallelism: 40
       timeout: 300000
+    # Each engine entry is a separate engine user and therefore a separate ALTO version owner,
+    # so the same taas deployment can be exposed once per model domain. Uncomment what you need.
+    # tuzka-kramarky:
+    #   type: "TUZKA"
+    #   baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
+    #   apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
+    #   fmt: "alto"
+    #   domain: "kramarky"
+    #   parallelism: 40
+    #   timeout: 300000
+    # tuzka-handwritten:
+    #   type: "TUZKA"
+    #   baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
+    #   apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
+    #   fmt: "alto"
+    #   domain: "handwritten"
+    #   parallelism: 40
+    #   timeout: 300000
+    # tuzka-kurrent:
+    #   type: "TUZKA"
+    #   baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
+    #   apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
+    #   fmt: "alto"
+    #   domain: "kurrent"
+    #   parallelism: 40
+    #   timeout: 300000
 
 spring:
   datasource:

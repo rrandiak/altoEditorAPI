@@ -43,6 +43,11 @@ public class EnginesProperties {
         private String baseUrl;
         /** Result format requested from taas; we persist the ALTO. */
         private String fmt = "alto";
+        /**
+         * taas model domain: {@code kramarky}, {@code handwritten}, {@code kurrent}, or null/blank
+         * for the default printed models. Define one engine per domain to run several side by side.
+         */
+        private String domain;
         /** Connect timeout for taas HTTP calls. */
         private Integer connectTimeoutMillis = 10_000;
         /** Read timeout for a single taas HTTP call. */

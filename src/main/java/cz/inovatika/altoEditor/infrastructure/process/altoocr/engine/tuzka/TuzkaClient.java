@@ -23,10 +23,12 @@ public class TuzkaClient {
 
     private final WebClient webClient;
     private final String fmt;
+    private final String domain;
 
-    public TuzkaClient(WebClient webClient, String fmt) {
+    public TuzkaClient(WebClient webClient, String fmt, String domain) {
         this.webClient = webClient;
         this.fmt = fmt;
+        this.domain = domain;
     }
 
     /**
@@ -46,6 +48,10 @@ public class TuzkaClient {
         }).contentType(MediaType.IMAGE_JPEG);
         body.part("uuid", externalId);
         body.part("fmt", fmt);
+        // Omitted entirely for the default printed models — taas treats a missing domain as default.
+        if (domain != null && !domain.isBlank()) {
+            body.part("domain", domain);
+        }
 
         TuzkaJobResponse response;
         try {

@@ -39,6 +39,9 @@ application:
       baseUrl: "${ALTO_EDITOR_TUZKA_URL:replaceMe}"
       apiKey: "${ALTO_EDITOR_TUZKA_KEY:replaceMe}"
       fmt: "alto"
+      # taas model domain: kramarky | handwritten | kurrent; empty = default printed models.
+      # Add further engine entries with a different domain to run several models side by side.
+      domain: "${ALTO_EDITOR_TUZKA_DOMAIN:}"
       parallelism: 20
 
 spring:

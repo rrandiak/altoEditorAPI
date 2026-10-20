@@ -39,10 +39,11 @@ public interface BatchRepository extends JpaRepository<Batch, Integer>,
     List<Batch> findByStateOrderByIdAsc(BatchState state);
 
     /**
-     * Find the oldest claimable batch of the given state and type (for planning), locked to
+     * Find the highest-priority claimable batch of the given state and type, locked to
      * avoid double-claim. A pipeline child stage is claimable only once every sibling with a
      * smaller stageOrder is DONE; standalone batches (no parent) are always claimable.
-     * Pass a page request of size 1 to get just the oldest.
+     * Within a priority, older batches are claimed first. A missing priority is MEDIUM.
+     * Pass a page request of size 1 to get just the first batch.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -55,7 +56,11 @@ public interface BatchRepository extends JpaRepository<Batch, Integer>,
                              AND s.stageOrder < b.stageOrder
                              AND s.state <> BatchState.DONE
                        ))
-                ORDER BY b.id ASC
+                ORDER BY CASE
+                    WHEN b.priority = cz.inovatika.altoEditor.domain.enums.BatchPriority.HIGH THEN 2
+                    WHEN b.priority = cz.inovatika.altoEditor.domain.enums.BatchPriority.LOW THEN 0
+                    ELSE 1 END DESC,
+                    b.id ASC
             """)
     List<Batch> findClaimableByStateAndType(@Param("state") BatchState state,
             @Param("type") BatchType type, Pageable pageable);

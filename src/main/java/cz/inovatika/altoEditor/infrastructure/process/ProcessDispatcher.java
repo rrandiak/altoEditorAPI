@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Central dispatcher for batch processes. Holds per-type executors. The cron-driven
- * {@link #plan()} claims the oldest PLANNED batch per type (when capacity allows) and
+ * {@link #plan()} claims the highest-priority PLANNED batch per type (when capacity allows) and
  * runs it on the type's executor. Facades only create batches (PLANNED); no direct submit.
  */
 @Component
@@ -81,7 +81,7 @@ public class ProcessDispatcher {
     }
 
     /**
-     * Called by cron: for each batch type, fill all free slots by claiming the oldest
+     * Called by cron: for each batch type, fill all free slots by claiming the highest-priority
      * PLANNED batches and submitting them to the type's executor, until no capacity or no planned left.
      */
     public void plan() {
@@ -92,7 +92,7 @@ public class ProcessDispatcher {
             }
             int max = Math.max(1, config.getMaxProcessesForType(type));
             while (getRunningAndQueuedCountForType(type) < max) {
-                Optional<Batch> batchOpt = batchService.claimOldestPlannedBatchByType(type);
+                Optional<Batch> batchOpt = batchService.claimNextPlannedBatchByType(type);
                 if (batchOpt.isEmpty()) {
                     break;
                 }

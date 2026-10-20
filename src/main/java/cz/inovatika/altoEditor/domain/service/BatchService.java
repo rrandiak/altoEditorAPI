@@ -51,12 +51,12 @@ public class BatchService {
     }
 
     /**
-     * Claim the oldest claimable PLANNED batch of the given type: set it to RUNNING and return it.
+     * Claim the highest-priority claimable PLANNED batch of the given type: set it to RUNNING and return it.
      * Uses a lock so concurrent planners do not claim the same batch. Pipeline child stages are
      * only claimed once their earlier sibling stages are DONE. Returns empty if none claimable.
      */
     @Transactional
-    public Optional<Batch> claimOldestPlannedBatchByType(BatchType type) {
+    public Optional<Batch> claimNextPlannedBatchByType(BatchType type) {
         Optional<Batch> opt = repository
                 .findClaimableByStateAndType(BatchState.PLANNED, type, PageRequest.of(0, 1))
                 .stream().findFirst();

@@ -151,6 +151,47 @@ class BatchRepositoryTest {
     class FindClaimable {
 
         @Test
+        @DisplayName("claims highest priority first, then oldest within that priority")
+        void claimsByPriorityThenId() {
+            Batch low = createBatch("uuid:low", BatchState.PLANNED, "dk");
+            low.setPriority(BatchPriority.LOW);
+            Batch medium = createBatch("uuid:medium", BatchState.PLANNED, "dk");
+            Batch highOld = createBatch("uuid:high-old", BatchState.PLANNED, "dk");
+            highOld.setPriority(BatchPriority.HIGH);
+            Batch highNew = createBatch("uuid:high-new", BatchState.PLANNED, "dk");
+            highNew.setPriority(BatchPriority.HIGH);
+            batchRepository.saveAll(List.of(low, medium, highOld, highNew));
+            entityManager.flush();
+
+            assertThat(claim(BatchType.GENERATE_SINGLE)).extracting(Batch::getId).isEqualTo(highOld.getId());
+            highOld.setState(BatchState.RUNNING);
+            entityManager.flush();
+            assertThat(claim(BatchType.GENERATE_SINGLE)).extracting(Batch::getId).isEqualTo(highNew.getId());
+            highNew.setState(BatchState.RUNNING);
+            entityManager.flush();
+            assertThat(claim(BatchType.GENERATE_SINGLE)).extracting(Batch::getId).isEqualTo(medium.getId());
+            medium.setState(BatchState.RUNNING);
+            entityManager.flush();
+            assertThat(claim(BatchType.GENERATE_SINGLE)).extracting(Batch::getId).isEqualTo(low.getId());
+        }
+
+        @Test
+        @DisplayName("blocked high-priority pipeline stage does not displace claimable batches")
+        void ignoresBlockedHighPriorityStage() {
+            Batch parent = batchRepository.save(Batch.builder()
+                    .type(BatchType.PIPELINE).priority(BatchPriority.HIGH)
+                    .pid("uuid:root").state(BatchState.PLANNED).createdBy(testUser).build());
+            batchRepository.save(createStage(BatchType.RETRIEVE_HIERARCHY, BatchState.PLANNED, parent.getId(), 0));
+            Batch blocked = createStage(BatchType.GENERATE_SINGLE, BatchState.PLANNED, parent.getId(), 1);
+            blocked.setPriority(BatchPriority.HIGH);
+            batchRepository.save(blocked);
+            Batch standalone = batchRepository.save(createBatch("uuid:standalone", BatchState.PLANNED, "dk"));
+            entityManager.flush();
+
+            assertThat(claim(BatchType.GENERATE_SINGLE)).extracting(Batch::getId).isEqualTo(standalone.getId());
+        }
+
+        @Test
         @DisplayName("standalone PLANNED batch (no parent) is always claimable")
         void standaloneBatchIsClaimable() {
             batchRepository.save(createBatch("uuid:1", BatchState.PLANNED, "dk"));

@@ -42,6 +42,7 @@ import cz.inovatika.altoEditor.infrastructure.editor.AltoXmlService;
 import cz.inovatika.altoEditor.infrastructure.kramerius.KrameriusService;
 import cz.inovatika.altoEditor.infrastructure.storage.AkubraService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 
 /**
  * Unit tests for {@link AltoVersionService} with mocks.
@@ -67,6 +68,8 @@ class AltoVersionServiceTest {
     @Mock
     private EntityManager entityManager;
     @Mock
+    private Query versionLockQuery;
+    @Mock
     private UserRepository userRepository;
     @Mock
     private BatchRepository batchRepository;
@@ -86,6 +89,11 @@ class AltoVersionServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(entityManager.createNativeQuery("SELECT 1 FROM object_hierarchy WHERE uuid = :uuid FOR UPDATE"))
+                .thenReturn(versionLockQuery);
+        when(versionLockQuery.setParameter(eq("uuid"), any(UUID.class)))
+                .thenReturn(versionLockQuery);
+        when(versionLockQuery.getResultList()).thenReturn(java.util.List.of(1));
     }
 
     @Nested

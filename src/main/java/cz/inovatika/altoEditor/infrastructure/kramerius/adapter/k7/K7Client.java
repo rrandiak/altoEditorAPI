@@ -1,8 +1,10 @@
 package cz.inovatika.altoEditor.infrastructure.kramerius.adapter.k7;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
@@ -264,39 +266,41 @@ public class K7Client implements KrameriusClient {
     private List<KrameriusObjectMetadata> getChildrenMetadata(String pid, String returnFields) {
         SolrResponse<K7ObjectMetadataDoc> solrResponse;
         int start = 0;
-        List<KrameriusObjectMetadata> children = new ArrayList<>();
+        Map<String, KrameriusObjectMetadata> children = new LinkedHashMap<>();
 
         do {
             solrResponse = searchInSolr("own_parent.pid:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
                     returnFields,
-                    CHILDREN_FETCH_ROWS, start, "rels_ext_index.sort asc");
+                    CHILDREN_FETCH_ROWS, start, "rels_ext_index.sort asc,pid asc");
 
-            children.addAll(
-                    solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
+            for (K7ObjectMetadataDoc doc : solrResponse.getResponse().getDocs()) {
+                children.putIfAbsent(doc.getPid(), doc.toMetadata());
+            }
 
             start += CHILDREN_FETCH_ROWS;
         } while (solrResponse.getResponse().getNumFound() > start);
 
-        return children;
+        return new ArrayList<>(children.values());
     }
 
     private List<KrameriusObjectMetadata> getCollectionChildrenMetadata(String pid) {
         SolrResponse<K7ObjectMetadataDoc> solrResponse;
         int start = 0;
-        List<KrameriusObjectMetadata> children = new ArrayList<>();
+        Map<String, KrameriusObjectMetadata> children = new LinkedHashMap<>();
 
         do {
             solrResponse = searchInSolr("in_collections.direct:\"" + pid + "\" AND " + Model.getShouldIgnoreQueryPart(),
                     METADATA_FL, CHILDREN_FETCH_ROWS,
-                    start, "created desc");
+                    start, "created desc,pid asc");
 
-            children.addAll(
-                    solrResponse.getResponse().getDocs().stream().map(K7ObjectMetadataDoc::toMetadata).toList());
+            for (K7ObjectMetadataDoc doc : solrResponse.getResponse().getDocs()) {
+                children.putIfAbsent(doc.getPid(), doc.toMetadata());
+            }
 
             start += CHILDREN_FETCH_ROWS;
         } while (solrResponse.getResponse().getNumFound() > start);
 
-        return children;
+        return new ArrayList<>(children.values());
     }
 
     @Override

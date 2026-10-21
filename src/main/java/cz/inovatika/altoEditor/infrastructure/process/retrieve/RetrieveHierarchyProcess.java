@@ -1,7 +1,9 @@
 package cz.inovatika.altoEditor.infrastructure.process.retrieve;
 
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -188,7 +190,10 @@ public class RetrieveHierarchyProcess extends BatchProcess {
             BlockingQueue<KrameriusObjectMetadata> queue,
             Batch batch) {
         Queue<KrameriusObjectMetadata> bfs = new LinkedList<>();
+        // Kramerius can return the same page more than once; only one worker may write its version.
+        Set<String> seenPids = new HashSet<>();
         bfs.offer(root);
+        seenPids.add(root.getPid());
 
         // Set the estimated item count to the number of pages in the hierarchy first
         // Update it as we discover new items
@@ -204,6 +209,10 @@ public class RetrieveHierarchyProcess extends BatchProcess {
 
                 Model model = Model.fromModelName(child.getModel());
                 if (model == null || model.shouldIgnoreForHierarchyRetrieval()) {
+                    continue;
+                }
+
+                if (!seenPids.add(child.getPid())) {
                     continue;
                 }
 

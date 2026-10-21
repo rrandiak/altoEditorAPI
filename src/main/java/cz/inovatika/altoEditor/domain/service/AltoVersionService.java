@@ -325,7 +325,8 @@ public class AltoVersionService {
      */
     @Transactional
     public AltoVersionWithContent createInitialVersion(String pid, String instance) {
-        if (repository.existsByDigitalObjectUuid(this.parseUuid(pid))) {
+        UUID uuid = this.parseUuid(pid);
+        if (repository.existsByDigitalObjectUuid(uuid)) {
             throw new AltoVersionAlreadyExistsException("Digital object with PID already exists: " + pid);
         }
 
@@ -336,6 +337,11 @@ public class AltoVersionService {
         }
 
         DigitalObject targetObj = objectHierarchyService.fetchAndStore(pid, instance);
+
+        lockVersionWrites(uuid);
+        if (repository.existsByDigitalObjectUuid(uuid)) {
+            throw new AltoVersionAlreadyExistsException("Digital object with PID already exists: " + pid);
+        }
 
         akubraService.saveAltoContent(pid, 0, content);
 
@@ -393,6 +399,15 @@ public class AltoVersionService {
         return new AltoVersionWithContent(obj, content);
     }
 
+    /** Serialize version selection and blob writes for the same PID across workers and app instances. */
+    private void lockVersionWrites(UUID uuid) {
+        if (entityManager.createNativeQuery("SELECT 1 FROM object_hierarchy WHERE uuid = :uuid FOR UPDATE")
+                .setParameter("uuid", uuid)
+                .getResultList().isEmpty()) {
+            throw new DigitalObjectNotFoundException(uuid);
+        }
+    }
+
     private AltoVersion createNewAltoVersion(
             String pid, Long userId, byte[] altoContent, AltoVersionState state) {
         User user = userService.getUserById(userId);
@@ -439,7 +454,9 @@ public class AltoVersionService {
      */
     @Transactional
     public AltoVersionWithContent updateOrCreateVersion(String pid, Long userId, byte[] altoContent) {
-        Optional<AltoVersion> altoVersionOpt = repository.findPendingForUser(PidAdapter.toUuid(pid), userId);
+        UUID uuid = PidAdapter.toUuid(pid);
+        lockVersionWrites(uuid);
+        Optional<AltoVersion> altoVersionOpt = repository.findPendingForUser(uuid, userId);
 
         if (altoVersionOpt.isPresent()) {
             AltoVersion altoVersion = altoVersionOpt.get();
@@ -478,7 +495,9 @@ public class AltoVersionService {
     @Transactional
     public AltoVersion updateOrCreateKrameriusVersion(String pid, Long userId, byte[] content,
             boolean refreshHierarchyStats) {
-        Optional<AltoVersion> altoVersionOpt = repository.findActive(PidAdapter.toUuid(pid));
+        UUID uuid = PidAdapter.toUuid(pid);
+        lockVersionWrites(uuid);
+        Optional<AltoVersion> altoVersionOpt = repository.findActive(uuid);
 
         if (altoVersionOpt.isEmpty()) {
             AltoVersion altoVersion = createNewAltoVersion(pid, userId, content, AltoVersionState.ACTIVE);
@@ -527,6 +546,7 @@ public class AltoVersionService {
     @Transactional
     public AltoVersion updateOrCreateEngineVersion(String pid, Long userId, byte[] content) {
         UUID uuid = PidAdapter.toUuid(pid);
+        lockVersionWrites(uuid);
         Optional<AltoVersion> altoVersionOpt = repository.findEngineUpdateCandidate(uuid, userId);
 
         // No version found, create new PENDING version

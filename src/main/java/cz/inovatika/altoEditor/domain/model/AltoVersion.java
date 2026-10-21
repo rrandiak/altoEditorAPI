@@ -118,7 +118,9 @@ public class AltoVersion {
      * Set of Kramerius instances where this version is currently used.
      */
     @ElementCollection
-    @CollectionTable(name = "alto_version_present_in_instances", joinColumns = @JoinColumn(name = "alto_version_id", referencedColumnName = "id"))
+    @CollectionTable(name = "alto_version_present_in_instances",
+            joinColumns = @JoinColumn(name = "alto_version_id", referencedColumnName = "id"),
+            indexes = @Index(name = "idx_av_present_in_instances_av_id", columnList = "alto_version_id"))
     @Column(name = "instance")
     @KeywordField
     @Builder.Default

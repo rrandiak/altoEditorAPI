@@ -83,13 +83,13 @@ public class TuzkaWsClient {
         pending.remove(externalId);
     }
 
-    private void onMessage(String text) {
+    void onMessage(String text) {
         try {
             TuzkaEvent event = objectMapper.readValue(text, TuzkaEvent.class);
-            if (event.getUuid() == null) {
+            if (event.getExternalId() == null) {
                 return;
             }
-            CompletableFuture<TuzkaEvent> future = pending.get(event.getUuid());
+            CompletableFuture<TuzkaEvent> future = pending.get(event.getExternalId());
             if (future != null) {
                 future.complete(event);
             }

@@ -34,7 +34,8 @@ public class TuzkaClient {
     /**
      * Submit a page image for OCR.
      *
-     * @param externalId caller's external id for the job (must be a valid, per-user-unique UUID)
+     * @param externalId caller's external id for the job; taas echoes it in the job's events
+     *                   (taas before 0.9 required a per-user-unique UUID)
      * @param image      the page image bytes
      * @return the taas job id to poll
      */
@@ -46,6 +47,8 @@ public class TuzkaClient {
                 return externalId + ".jpg";
             }
         }).contentType(MediaType.IMAGE_JPEG);
+        // external_id since taas 0.9; uuid for older taas. Each ignores the other.
+        body.part("external_id", externalId);
         body.part("uuid", externalId);
         body.part("fmt", fmt);
         // Omitted entirely for the default printed models — taas treats a missing domain as default.

@@ -62,7 +62,7 @@ public class TuzkaOcrEngine implements OcrEngine {
     }
 
     /**
-     * The taas external id (its {@code uuid} field) must parse as a UUID. Kramerius pids are
+     * The taas external id ({@code uuid} before taas 0.9) must parse as a UUID. Kramerius pids are
      * {@code uuid:<uuid>}, so use the pid's UUID part for correlation; fall back to a random
      * UUID if the pid is not a usable {@code uuid:} pid.
      */
